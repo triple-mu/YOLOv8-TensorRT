@@ -65,6 +65,26 @@ cmake -S . -B build -DOpenCV_DIR=$HOME/miniconda3/envs/ocv411/lib/cmake/opencv4 
 # runtime: add $HOME/miniconda3/envs/ocv411/lib to LD_LIBRARY_PATH
 ```
 
+## C++14 fallback (ghc::filesystem)
+
+The default build is C++17 and uses `std::filesystem`. For older toolchains, build
+at C++14 — `csrc/core/include/yolov8/fs.hpp` then selects the vendored
+`ghc::filesystem` (`csrc/core/include/yolov8/3rdparty/ghc_filesystem.hpp`, MIT)
+instead, with no source changes:
+
+```shell
+cmake -S . -B build -DTensorRT_ROOT=/path/to/TensorRT -DCMAKE_CXX_STANDARD=14
+cmake --build build -j
+```
+
+## Tests
+
+```shell
+cmake -S . -B build -DTensorRT_ROOT=/path/to/TensorRT -DBUILD_TESTS=ON
+cmake --build build -j
+ctest --test-dir build --output-on-failure   # self-contained core tests, no gtest needed
+```
+
 ## Verified matrix (RTX 3080 Ti, CUDA 12.8)
 
 Same `data/bus.jpg` detections (within fp16 tolerance) across every combination:

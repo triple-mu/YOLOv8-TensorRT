@@ -1,62 +1,56 @@
-# Start DeepStream Using the engine build from [`YOLOv8-TensorRT`](https://github.com/triple-Mu/YOLOv8-TensorRT)
+# DeepStream deployment
 
-## 1. Build you own TensorRT engine from `trtexec` or [`build.py`](https://github.com/triple-Mu/YOLOv8-TensorRT/blob/main/build.py)
+Run a YOLOv8 detection engine built with [YOLOv8-TensorRT](https://github.com/triple-Mu/YOLOv8-TensorRT) inside NVIDIA DeepStream, using the custom bbox parser in this directory.
 
-For example, if you have built an engine named `yolov8s.engine`.
+> Requires the **DeepStream SDK** and an **End2End** engine (built from `export-det.py`, output names `num_dets;bboxes;scores;labels`).
 
-## 2. Compile deepstream plugin
+## 1. Build a TensorRT engine
 
-First, modify the [`CMakeLists.txt`](https://github.com/triple-Mu/YOLOv8-TensorRT/blob/main/csrc/deepstream/CMakeLists.txt)
+See the project [README](../../README.md): export an End2End ONNX with `export-det.py`, then build it with `build.py` or `trtexec`, e.g. `yolov8s.engine`.
 
-```cmake
-# Set your own TensorRT path
-set(TensorRT_INCLUDE_DIRS /usr/include/x86_64-linux-gnu)
-set(TensorRT_LIBRARIES /usr/lib/x86_64-linux-gnu)
-# Set your own DeepStream path
-set(DEEPSTREAM /opt/nvidia/deepstream/deepstream)
-```
+## 2. Build the parser plugin
 
-Second, build deepstream plugin
+The plugin is a standalone CMake project. Point it at your TensorRT and DeepStream installs (defaults shown):
 
 ```shell
-mkdir build
-cd build
-cmake ..
-make
+cd csrc/deepstream
+cmake -S . -B build \
+    -DTensorRT_INCLUDE_DIRS=/usr/include/x86_64-linux-gnu \
+    -DTensorRT_LIBRARIES=/usr/lib/x86_64-linux-gnu \
+    -DDEEPSTREAM=/opt/nvidia/deepstream/deepstream
+cmake --build build -j
+# -> build/libnvdsinfer_custom_bbox_yoloV8.so
 ```
 
-You will get a lib `libnvdsinfer_custom_bbox_yoloV8.so` in `build`.
+It is also wired into the top-level build via `cmake -S . -B build -DBUILD_DEEPSTREAM=ON` (off by default; needs the SDK).
 
-## 3. Modify the deepstream config
+## 3. Configure DeepStream
 
-The net config is [`config_yoloV8.txt`](config_yoloV8.txt). Please modify by your own model.
+Edit [`config_yoloV8.txt`](config_yoloV8.txt) for your model:
 
 ```text
-net-scale-factor=0.0039215697906911373                              # the normalize param == 1/255
-model-engine-file=./yolov8s.engine                                  # the engine path you build
-labelfile-path=./labels.txt                                         # the class name path
-num-detected-classes=80                                             # the number of classes
-output-blob-names=num_dets;bboxes;scores;labels                     # the model output names
-custom-lib-path=./build/libnvdsinfer_custom_bbox_yoloV8.so          # the deepstream plugin you build
+net-scale-factor=0.0039215697906911373                       # 1/255 normalization
+model-engine-file=./yolov8s.engine                           # the engine you built
+labelfile-path=./labels.txt                                  # class-name file
+num-detected-classes=80
+output-blob-names=num_dets;bboxes;scores;labels              # must match the engine outputs
+custom-lib-path=./build/libnvdsinfer_custom_bbox_yoloV8.so   # the plugin built above
 ```
 
-The deepstream config is [`deepstream_app_config.txt`](deepstream_app_config.txt).
+Set the input source in [`deepstream_app_config.txt`](deepstream_app_config.txt):
 
 ```text
-****
 [source0]
 enable=1
-#Type - 1=CameraV4L2 2=URI 3=MultiURI
-type=3
-uri=file://./sample_1080p_h264.mp4                                  # the video path or stream you want to detect
-****
-****
-config-file=config_yoloV8.txt                                       # the net config path
+type=3                                                       # 1=CameraV4L2 2=URI 3=MultiURI
+uri=file://./sample_1080p_h264.mp4                           # video file or stream
+...
+config-file=config_yoloV8.txt
 ```
 
-You can get more information from [`deepstream offical`](https://developer.nvidia.com/deepstream-sdk).
+More options: [DeepStream SDK docs](https://developer.nvidia.com/deepstream-sdk).
 
-## 4. Runing detector !
+## 4. Run
 
 ```shell
 deepstream-app -c deepstream_app_config.txt
