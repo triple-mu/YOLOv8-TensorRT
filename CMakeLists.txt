@@ -60,6 +60,13 @@ add_subdirectory(csrc/core)
 # Thin per-task executables (one source file each in csrc/apps).
 add_subdirectory(csrc/apps)
 
+# Core unit tests (self-contained, no gtest dependency): -DBUILD_TESTS=ON + ctest.
+option(BUILD_TESTS "Build C++ core unit tests" OFF)
+if(BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(csrc/tests)
+endif()
+
 # The task executables above are platform-agnostic: to deploy on Jetson, build
 # them natively on the device (or cross-compile) with -DTensorRT_ROOT pointing at
 # the aarch64 TensorRT. No separate Jetson sources are needed.
