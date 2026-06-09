@@ -5,6 +5,7 @@
 #include "yolov8/preprocess.hpp"
 #include "yolov8/trt_compat.hpp"
 #include <fstream>
+#include <iostream>
 #include <vector>
 
 namespace yolov8 {
@@ -32,6 +33,11 @@ void Engine::load_engine(const std::string& engine_path)
     TRT_CHECK(engine_ != nullptr);
     context_.reset(engine_->createExecutionContext());
     TRT_CHECK(context_ != nullptr);
+
+    if (config_.profile) {
+        profiler_ = std::make_unique<Profiler>();
+        context_->setProfiler(profiler_.get());
+    }
 
     const int n = compat::num_io_tensors(engine_.get());
     for (int i = 0; i < n; ++i) {
@@ -131,6 +137,13 @@ void Engine::infer()
             host_ptrs_[i], device_ptrs_[i + input_bindings_.size()], bytes, cudaMemcpyDeviceToHost, stream_.get()));
     }
     CUDA_CHECK(cudaStreamSynchronize(stream_.get()));
+}
+
+void Engine::print_profile() const
+{
+    if (profiler_ && !profiler_->empty()) {
+        profiler_->print(std::cout);
+    }
 }
 
 }  // namespace yolov8

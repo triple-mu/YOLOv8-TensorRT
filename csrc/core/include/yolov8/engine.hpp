@@ -2,8 +2,10 @@
 #include "NvInfer.h"
 #include "opencv2/opencv.hpp"
 #include "yolov8/config.hpp"
+#include "yolov8/profiler.hpp"
 #include "yolov8/trt_raii.hpp"
 #include "yolov8/types.hpp"
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -33,6 +35,8 @@ public:
         return config_;
     }
 
+    void print_profile() const;  // prints the per-layer report if --profile was set
+
 protected:
     // Preprocess one image into an NCHW blob. Default is letterbox; cls overrides it.
     virtual void preprocess(const cv::Mat& image, cv::Mat& blob);
@@ -54,6 +58,7 @@ private:
     TrtUniquePtr<nvinfer1::IRuntime>          runtime_;
     TrtUniquePtr<nvinfer1::ICudaEngine>       engine_;
     TrtUniquePtr<nvinfer1::IExecutionContext> context_;
+    std::unique_ptr<Profiler>                 profiler_;  // non-null only when --profile
 };
 
 }  // namespace yolov8

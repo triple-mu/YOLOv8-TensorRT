@@ -175,6 +175,7 @@ int run(Engine& engine, const CliArgs& args)
     if (args.config.show) {
         cv::destroyAllWindows();
     }
+    engine.print_profile();
     return 0;
 }
 

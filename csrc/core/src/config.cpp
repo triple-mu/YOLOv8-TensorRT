@@ -25,6 +25,7 @@ namespace {
               << "  --seg-hw <h> <w>  mask prototype size (default " << d.seg_h << " " << d.seg_w << ")\n"
               << "  --out-dir <dir>   output directory (default \"" << d.out_dir << "\")\n"
               << "  --show            display results in a window instead of saving\n"
+              << "  --profile         print a per-layer timing report\n"
               << "  --no-warmup       skip warmup iterations\n"
               << "  -h, --help        show this help\n";
     std::exit(code);
@@ -95,6 +96,9 @@ CliArgs parse_args(int argc, char** argv, const InferConfig& defaults)
         }
         else if (a == "--show") {
             args.config.show = true;
+        }
+        else if (a == "--profile") {
+            args.config.profile = true;
         }
         else if (a == "--no-warmup") {
             args.config.warmup = false;

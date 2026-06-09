@@ -17,6 +17,7 @@ struct InferConfig {
     std::string labels_path;  // empty -> built-in COCO names
     bool        warmup  = true;
     bool        show    = false;  // off by default (works headless); otherwise save
+    bool        profile = false;  // attach a per-layer IProfiler and print a report
     std::string out_dir = "output";
 };
 
