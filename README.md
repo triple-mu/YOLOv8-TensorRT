@@ -31,7 +31,7 @@ Take a trained `ultralytics` YOLOv8 model, export it to ONNX, build a TensorRT e
 | Oriented boxes | `obb`             | `yolov8_obb`                                          | ultralytics                    |
 | Classification | `cls`             | `yolov8_cls`                                          | ultralytics                    |
 
-> **Engine layouts.** `export-det.py` produces an **End2End** detection engine with NMS baked in (outputs `num_dets, bboxes, scores, labels`); `export-seg.py` produces a segmentation engine (outputs `outputs, proto`); the native `ultralytics` export keeps the model's **raw** output (e.g. `[1, 84, anchors]`). Match the engine to its consumer: `infer.py --task det` and `yolov8_detect_e2e` need the End2End engine, `infer.py --task seg` needs the `export-seg.py` engine, while `yolov8_detect` and the pose/obb/cls paths take the raw ultralytics export.
+> **Engine layouts.** `export-det.py` produces an **End2End** detection engine with NMS built in (outputs `num_dets, bboxes, scores, labels`); `export-seg.py` produces a segmentation engine (outputs `outputs, proto`); the native `ultralytics` export keeps the model's **raw** output (e.g. `[1, 84, anchors]`). Match the engine to its consumer: `infer.py --task det` and `yolov8_detect_e2e` need the End2End engine, `infer.py --task seg` needs the `export-seg.py` engine, while `yolov8_detect` and the pose/obb/cls paths take the raw ultralytics export.
 
 ## Layout
 
@@ -65,7 +65,7 @@ pip install pycuda                 # optional: infer.py --backend pycuda
 
 (`ultralytics` downloads pretrained weights such as `yolov8s.pt` automatically on first use.)
 
-End2End (NMS baked in — detection / segmentation):
+End2End (NMS built in — detection / segmentation):
 
 ```shell
 python export-det.py --weights yolov8s.pt --sim --input-shape 1 3 640 640 \
@@ -73,7 +73,7 @@ python export-det.py --weights yolov8s.pt --sim --input-shape 1 3 640 640 \
 python export-seg.py --weights yolov8s-seg.pt --sim --device cuda:0
 ```
 
-Raw export (pose / obb / cls, and detection/segmentation without baked-in NMS) uses ultralytics:
+Raw export (pose / obb / cls, and detection/segmentation without built-in NMS) uses ultralytics:
 
 ```shell
 yolo export model=yolov8s-pose.pt format=onnx opset=11 simplify
