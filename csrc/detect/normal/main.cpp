@@ -1,130 +1,125 @@
-//
-// Created by ubuntu on 1/20/23.
-//
+#include "yolov8/engine.hpp"
+#include "yolov8/labels.hpp"
+#include "yolov8/runner.hpp"
 #include "opencv2/opencv.hpp"
-#include "yolov8.hpp"
-#include <chrono>
+#include <algorithm>
+#include <cstdio>
+#include <iostream>
+#include <string>
+#include <vector>
 
-namespace fs = ghc::filesystem;
+using namespace yolov8;
 
-const std::vector<std::string> CLASS_NAMES = {
-    "person",         "bicycle",    "car",           "motorcycle",    "airplane",     "bus",           "train",
-    "truck",          "boat",       "traffic light", "fire hydrant",  "stop sign",    "parking meter", "bench",
-    "bird",           "cat",        "dog",           "horse",         "sheep",        "cow",           "elephant",
-    "bear",           "zebra",      "giraffe",       "backpack",      "umbrella",     "handbag",       "tie",
-    "suitcase",       "frisbee",    "skis",          "snowboard",     "sports ball",  "kite",          "baseball bat",
-    "baseball glove", "skateboard", "surfboard",     "tennis racket", "bottle",       "wine glass",    "cup",
-    "fork",           "knife",      "spoon",         "bowl",          "banana",       "apple",         "sandwich",
-    "orange",         "broccoli",   "carrot",        "hot dog",       "pizza",        "donut",         "cake",
-    "chair",          "couch",      "potted plant",  "bed",           "dining table", "toilet",        "tv",
-    "laptop",         "mouse",      "remote",        "keyboard",      "cell phone",   "microwave",     "oven",
-    "toaster",        "sink",       "refrigerator",  "book",          "clock",        "vase",          "scissors",
-    "teddy bear",     "hair drier", "toothbrush"};
+// YOLOv8 detection: a single output [1, 4+num_classes, num_anchors].
+class DetectEngine : public Engine {
+public:
+    DetectEngine(const std::string& engine_path, const InferConfig& config) : Engine(engine_path, config)
+    {
+        class_names_ = config.labels_path.empty() ? coco_labels() : load_labels(config.labels_path);
+    }
 
-const std::vector<std::vector<unsigned int>> COLORS = {
-    {0, 114, 189},   {217, 83, 25},   {237, 177, 32},  {126, 47, 142},  {119, 172, 48},  {77, 190, 238},
-    {162, 20, 47},   {76, 76, 76},    {153, 153, 153}, {255, 0, 0},     {255, 128, 0},   {191, 191, 0},
-    {0, 255, 0},     {0, 0, 255},     {170, 0, 255},   {85, 85, 0},     {85, 170, 0},    {85, 255, 0},
-    {170, 85, 0},    {170, 170, 0},   {170, 255, 0},   {255, 85, 0},    {255, 170, 0},   {255, 255, 0},
-    {0, 85, 128},    {0, 170, 128},   {0, 255, 128},   {85, 0, 128},    {85, 85, 128},   {85, 170, 128},
-    {85, 255, 128},  {170, 0, 128},   {170, 85, 128},  {170, 170, 128}, {170, 255, 128}, {255, 0, 128},
-    {255, 85, 128},  {255, 170, 128}, {255, 255, 128}, {0, 85, 255},    {0, 170, 255},   {0, 255, 255},
-    {85, 0, 255},    {85, 85, 255},   {85, 170, 255},  {85, 255, 255},  {170, 0, 255},   {170, 85, 255},
-    {170, 170, 255}, {170, 255, 255}, {255, 0, 255},   {255, 85, 255},  {255, 170, 255}, {85, 0, 0},
-    {128, 0, 0},     {170, 0, 0},     {212, 0, 0},     {255, 0, 0},     {0, 43, 0},      {0, 85, 0},
-    {0, 128, 0},     {0, 170, 0},     {0, 212, 0},     {0, 255, 0},     {0, 0, 43},      {0, 0, 85},
-    {0, 0, 128},     {0, 0, 170},     {0, 0, 212},     {0, 0, 255},     {0, 0, 0},       {36, 36, 36},
-    {73, 73, 73},    {109, 109, 109}, {146, 146, 146}, {182, 182, 182}, {219, 219, 219}, {0, 114, 189},
-    {80, 183, 189},  {128, 128, 0}};
+    void postprocess(std::vector<Object>& objs) override
+    {
+        objs.clear();
+        const int   num_channels = output_bindings_[0].dims.d[1];
+        const int   num_anchors  = output_bindings_[0].dims.d[2];
+        const int   num_labels   = num_channels - 4;
+        const float dw = pparam_.dw, dh = pparam_.dh;
+        const float width = pparam_.width, height = pparam_.height, ratio = pparam_.ratio;
+
+        std::vector<cv::Rect> bboxes;
+        std::vector<float>    scores;
+        std::vector<int>      labels;
+        std::vector<int>      indices;
+
+        cv::Mat output(num_channels, num_anchors, CV_32F, host_ptrs_[0]);
+        output = output.t();
+        for (int i = 0; i < num_anchors; ++i) {
+            auto        row_ptr   = output.row(i).ptr<float>();
+            auto        bbox_ptr  = row_ptr;
+            auto        score_ptr = row_ptr + 4;
+            auto        max_ptr   = std::max_element(score_ptr, score_ptr + num_labels);
+            const float score     = *max_ptr;
+            if (score > config_.score_thres) {
+                const float x = *bbox_ptr++ - dw;
+                const float y = *bbox_ptr++ - dh;
+                const float w = *bbox_ptr++;
+                const float h = *bbox_ptr;
+
+                const float x0 = clamp((x - 0.5f * w) * ratio, 0.f, width);
+                const float y0 = clamp((y - 0.5f * h) * ratio, 0.f, height);
+                const float x1 = clamp((x + 0.5f * w) * ratio, 0.f, width);
+                const float y1 = clamp((y + 0.5f * h) * ratio, 0.f, height);
+
+                bboxes.emplace_back(cv::Rect_<float>(x0, y0, x1 - x0, y1 - y0));
+                labels.push_back(static_cast<int>(max_ptr - score_ptr));
+                scores.push_back(score);
+            }
+        }
+
+#ifdef BATCHED_NMS
+        cv::dnn::NMSBoxesBatched(bboxes, scores, labels, config_.score_thres, config_.iou_thres, indices);
+#else
+        cv::dnn::NMSBoxes(bboxes, scores, config_.score_thres, config_.iou_thres, indices);
+#endif
+
+        int cnt = 0;
+        for (int idx : indices) {
+            if (cnt >= config_.topk) {
+                break;
+            }
+            Object obj;
+            obj.rect  = bboxes[idx];
+            obj.prob  = scores[idx];
+            obj.label = labels[idx];
+            objs.push_back(obj);
+            ++cnt;
+        }
+    }
+
+    void draw(const cv::Mat& image, cv::Mat& res, const std::vector<Object>& objs) const override
+    {
+        const Palette& colors = palette();
+        res                   = image.clone();
+        for (const auto& obj : objs) {
+            const Color& c = colors[obj.label % colors.size()];
+            cv::Scalar   color(c[0], c[1], c[2]);
+            cv::rectangle(res, obj.rect, color, 2);
+
+            const std::string name = obj.label < static_cast<int>(class_names_.size())
+                                         ? class_names_[obj.label]
+                                         : std::to_string(obj.label);
+            char text[256];
+            std::snprintf(text, sizeof(text), "%s %.1f%%", name.c_str(), obj.prob * 100);
+
+            int      base_line = 0;
+            cv::Size label_size = cv::getTextSize(text, cv::FONT_HERSHEY_SIMPLEX, 0.4, 1, &base_line);
+
+            const int x = static_cast<int>(obj.rect.x);
+            int       y = static_cast<int>(obj.rect.y) + 1;
+            if (y > res.rows) {
+                y = res.rows;
+            }
+            cv::rectangle(res, cv::Rect(x, y, label_size.width, label_size.height + base_line), {0, 0, 255}, -1);
+            cv::putText(res, text, cv::Point(x, y + label_size.height), cv::FONT_HERSHEY_SIMPLEX, 0.4,
+                        {255, 255, 255}, 1);
+        }
+    }
+
+private:
+    std::vector<std::string> class_names_;
+};
 
 int main(int argc, char** argv)
 {
-    if (argc != 3) {
-        fprintf(stderr, "Usage: %s [engine_path] [image_path/image_dir/video_path]\n", argv[0]);
-        return -1;
+    try {
+        const CliArgs args = parse_args(argc, argv);
+        DetectEngine  engine(args.engine, args.config);
+        engine.make_pipe();
+        return run(engine, args);
     }
-
-    // cuda:0
-    cudaSetDevice(0);
-
-    const std::string engine_file_path{argv[1]};
-    const fs::path    path{argv[2]};
-
-    std::vector<std::string> imagePathList;
-    bool                     isVideo{false};
-
-    auto yolov8 = new YOLOv8(engine_file_path);
-    yolov8->make_pipe(true);
-
-    if (fs::exists(path)) {
-        std::string suffix = path.extension();
-        if (suffix == ".jpg" || suffix == ".jpeg" || suffix == ".png") {
-            imagePathList.push_back(path);
-        }
-        else if (suffix == ".mp4" || suffix == ".avi" || suffix == ".m4v" || suffix == ".mpeg" || suffix == ".mov"
-                 || suffix == ".mkv") {
-            isVideo = true;
-        }
-        else {
-            printf("suffix %s is wrong !!!\n", suffix.c_str());
-            std::abort();
-        }
+    catch (const std::exception& e) {
+        std::cerr << "error: " << e.what() << "\n";
+        return 1;
     }
-    else if (fs::is_directory(path)) {
-        cv::glob(path.string() + "/*.jpg", imagePathList);
-    }
-
-    cv::Mat             res, image;
-    cv::Size            size = cv::Size{640, 640};
-    int      num_labels  = 80;
-    int      topk        = 100;
-    float    score_thres = 0.25f;
-    float    iou_thres   = 0.65f;
-
-    std::vector<Object> objs;
-
-    cv::namedWindow("result", cv::WINDOW_AUTOSIZE);
-
-    if (isVideo) {
-        cv::VideoCapture cap(path);
-
-        if (!cap.isOpened()) {
-            printf("can not open %s\n", path.c_str());
-            return -1;
-        }
-        while (cap.read(image)) {
-            objs.clear();
-            yolov8->copy_from_Mat(image, size);
-            auto start = std::chrono::system_clock::now();
-            yolov8->infer();
-            auto end = std::chrono::system_clock::now();
-            yolov8->postprocess(objs, score_thres, iou_thres, topk, num_labels);
-            yolov8->draw_objects(image, res, objs, CLASS_NAMES, COLORS);
-            auto tc = (double)std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() / 1000.;
-            printf("cost %2.4lf ms\n", tc);
-            cv::imshow("result", res);
-            if (cv::waitKey(10) == 'q') {
-                break;
-            }
-        }
-    }
-    else {
-        for (auto& p : imagePathList) {
-            objs.clear();
-            image = cv::imread(p);
-            yolov8->copy_from_Mat(image, size);
-            auto start = std::chrono::system_clock::now();
-            yolov8->infer();
-            auto end = std::chrono::system_clock::now();
-            yolov8->postprocess(objs, score_thres, iou_thres, topk, num_labels);
-            yolov8->draw_objects(image, res, objs, CLASS_NAMES, COLORS);
-            auto tc = (double)std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() / 1000.;
-            printf("cost %2.4lf ms\n", tc);
-            cv::imshow("result", res);
-            cv::waitKey(0);
-        }
-    }
-    cv::destroyAllWindows();
-    delete yolov8;
-    return 0;
 }
