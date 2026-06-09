@@ -57,14 +57,8 @@ add_link_options(-Wl,--allow-shlib-undefined)
 # Shared library used by every task.
 add_subdirectory(csrc/core)
 
-# Task executables (added as each is migrated to the core library).
-add_subdirectory(csrc/detect/normal)
-add_subdirectory(csrc/detect/end2end)
-add_subdirectory(csrc/segment/normal)
-add_subdirectory(csrc/segment/simple)
-add_subdirectory(csrc/pose/normal)
-add_subdirectory(csrc/obb/normal)
-add_subdirectory(csrc/cls/normal)
+# Thin per-task executables (one source file each in csrc/apps).
+add_subdirectory(csrc/apps)
 
 # The task executables above are platform-agnostic: to deploy on Jetson, build
 # them natively on the device (or cross-compile) with -DTensorRT_ROOT pointing at

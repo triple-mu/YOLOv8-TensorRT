@@ -1,2 +1,0 @@
-add_executable(yolov8_detect_e2e main.cpp)
-target_link_libraries(yolov8_detect_e2e PRIVATE yolov8_core)

@@ -1,2 +1,0 @@
-add_executable(yolov8_seg_simple main.cpp)
-target_link_libraries(yolov8_seg_simple PRIVATE yolov8_core)
