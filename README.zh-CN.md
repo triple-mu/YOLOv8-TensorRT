@@ -15,7 +15,7 @@ ______________________________________________________________________
 
 ## 特性
 
-- **统一的 C++ 核心库**（`libyolov8_core`）：RAII 管理 TensorRT/CUDA 资源、用异常替代 `assert`，TensorRT 版本差异全部收敛到*唯一*的 `trt_compat` 层。
+- **统一的 C++ 核心库**（`libyolov8_core`）：RAII 管理 TensorRT/CUDA 资源、用异常替代 `assert`，TensorRT 版本差异全部集中在*唯一*的 `trt_compat` 层。
 - **构建自动适配版本**：自动识别 TensorRT（8 ↔ 10/11，含 enterprise 头）与 OpenCV（`≥4.7` 切换为类感知 NMS），详见 [docs/Build.md](docs/Build.md)。已在 TensorRT **8.6 / 10.8 / 10.16 / 11.0** 与 OpenCV **4.5 / 4.6 / 4.11** 上验证。
 - **C++14 回退**：C++17 用 `std::filesystem`，否则用内置的 `ghc::filesystem`（`-DCMAKE_CXX_STANDARD=14`）。
 - **统一 Python 入口**：`infer.py --task {det,seg,pose,obb,cls} --backend {torch,cudart,pycuda}` 取代了原先按任务拆分的十个脚本；cudart/pycuda 后端现已支持 TensorRT 10。
@@ -31,14 +31,14 @@ ______________________________________________________________________
 | 旋转框 | `obb` | `yolov8_obb` | ultralytics |
 | 分类 | `cls` | `yolov8_cls` | ultralytics |
 
-> **引擎布局**：`export-det.py` 产出 **End2End** 检测引擎（NMS 烘焙进图，输出 `num_dets, bboxes, scores, labels`）；`export-seg.py` 产出分割引擎（输出 `outputs, proto`）；`ultralytics` 原生导出保留模型 **raw** 输出（如 `[1, 84, anchors]`）。消费端必须匹配引擎：`infer.py --task det` 与 `yolov8_detect_e2e` 用 End2End 引擎，`infer.py --task seg` 用 `export-seg.py` 引擎，`yolov8_detect` 与 pose/obb/cls 路径用 raw ultralytics 导出。
+> **引擎布局**：`export-det.py` 产出 **End2End** 检测引擎（NMS 内置到引擎，输出 `num_dets, bboxes, scores, labels`）；`export-seg.py` 产出分割引擎（输出 `outputs, proto`）；`ultralytics` 原生导出保留模型 **raw** 输出（如 `[1, 84, anchors]`）。消费端必须匹配引擎：`infer.py --task det` 与 `yolov8_detect_e2e` 用 End2End 引擎，`infer.py --task seg` 用 `export-seg.py` 引擎，`yolov8_detect` 与 pose/obb/cls 路径用 raw ultralytics 导出。
 
 ## 目录结构
 
 ```
 csrc/
 ├── core/        # libyolov8_core: engine、trt_compat、RAII、前后处理、profiler
-├── apps/        # 每个任务一个薄可执行 (detect / segment / pose / obb / cls ...)
+├── apps/        # 每个任务一个轻量可执行 (detect / segment / pose / obb / cls ...)
 ├── deepstream/  # DeepStream bbox 解析插件 (可选)
 └── tests/       # C++ 单元测试 (ctest)
 models/          # Python: engine 构建、后端、compat、labels、各任务处理
@@ -65,7 +65,7 @@ pip install pycuda                 # 可选: infer.py --backend pycuda
 
 （`ultralytics` 会在首次使用时自动下载 `yolov8s.pt` 等预训练权重。）
 
-End2End（NMS 烘焙进图 —— 检测 / 分割）：
+End2End（NMS 内置到引擎 —— 检测 / 分割）：
 
 ```shell
 python export-det.py --weights yolov8s.pt --sim --input-shape 1 3 640 640 \
@@ -73,7 +73,7 @@ python export-det.py --weights yolov8s.pt --sim --input-shape 1 3 640 640 \
 python export-seg.py --weights yolov8s-seg.pt --sim --device cuda:0
 ```
 
-Raw 导出（pose / obb / cls，以及不烘焙 NMS 的检测/分割）用 ultralytics：
+Raw 导出（pose / obb / cls，以及不内置 NMS 的检测/分割）用 ultralytics：
 
 ```shell
 yolo export model=yolov8s-pose.pt format=onnx opset=11 simplify
