@@ -39,12 +39,12 @@ add_subdirectory(csrc/pose/normal)
 add_subdirectory(csrc/obb/normal)
 add_subdirectory(csrc/cls/normal)
 
-# Platform targets — off by default (cannot be validated on this x86 host).
-option(BUILD_JETSON "Build Jetson (aarch64) targets" OFF)
+# The task executables above are platform-agnostic: to deploy on Jetson, build
+# them natively on the device (or cross-compile) with -DTensorRT_ROOT pointing at
+# the aarch64 TensorRT. No separate Jetson sources are needed.
+
+# DeepStream parser plugin — needs the DeepStream SDK, so it is off by default.
 option(BUILD_DEEPSTREAM "Build the DeepStream parser plugin" OFF)
-if(BUILD_JETSON)
-    add_subdirectory(csrc/jetson)
-endif()
 if(BUILD_DEEPSTREAM)
     add_subdirectory(csrc/deepstream)
 endif()
