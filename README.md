@@ -93,7 +93,7 @@ export LD_LIBRARY_PATH=/path/to/TensorRT/lib:$LD_LIBRARY_PATH
 ./build/bin/yolov8_detect yolov8s.engine data/bus.jpg --out-dir output   # --show / --profile
 ```
 
-Targets: `yolov8_detect`, `yolov8_detect_e2e`, `yolov8_seg`, `yolov8_seg_simple`, `yolov8_pose`, `yolov8_obb`, `yolov8_cls`. Build details, multiple TensorRT/OpenCV versions, cuDNN for TensorRT 8 and the C++14 fallback are in [docs/Build.md](docs/Build.md). Class names live in `data/labels/*.txt` (pass `--labels`); per-task notes in [docs/](docs/).
+Targets: `yolov8_detect`, `yolov8_detect_e2e`, `yolov8_seg`, `yolov8_seg_simple`, `yolov8_pose`, `yolov8_obb`, `yolov8_cls`. Build details, multiple TensorRT/OpenCV versions, cuDNN for TensorRT 8 and the C++14 fallback are in [docs/Build.md](docs/Build.md). Class names live in `data/labels/*.txt` (pass `--labels`).
 
 ## Profiling & benchmark
 
@@ -114,7 +114,7 @@ cmake -S . -B build -DBUILD_TESTS=ON && ctest --test-dir build   # C++ unit test
 ## Deployment notes
 
 - **DeepStream**: parser plugin in [csrc/deepstream](csrc/deepstream/README.md) (`-DBUILD_DEEPSTREAM=ON`, needs the DeepStream SDK).
-- **Jetson**: build the same targets on-device with `-DTensorRT_ROOT` pointing at the aarch64 TensorRT — no separate sources. See [docs/Jetson.md](docs/Jetson.md).
+- **Jetson**: build the same targets on-device with `-DTensorRT_ROOT` pointing at the aarch64 TensorRT — no separate sources needed (see [docs/Build.md](docs/Build.md)).
 
 ## Acknowledgments
 
