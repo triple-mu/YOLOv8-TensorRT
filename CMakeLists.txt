@@ -27,6 +27,29 @@ find_package(TensorRT REQUIRED)
 print_var(TensorRT_VERSION_STRING)
 print_var(OpenCV_VERSION)
 
+# TensorRT < 10 plugins (libnvinfer_plugin) link against cuDNN 8; TensorRT 10+
+# dropped that hard dependency. Locate cuDNN so older TensorRT links cleanly.
+# Hint via -DCUDNN_ROOT=<dir> (e.g. a conda env that provides libcudnn.so.8).
+if(TensorRT_VERSION_MAJOR LESS 10)
+    find_library(CUDNN_LIBRARY NAMES cudnn
+        HINTS ${CUDNN_ROOT} $ENV{CUDNN_ROOT} ${CUDAToolkit_LIBRARY_DIR}
+        PATH_SUFFIXES lib lib64)
+    if(CUDNN_LIBRARY)
+        get_filename_component(_cudnn_dir ${CUDNN_LIBRARY} DIRECTORY)
+        message(STATUS "cuDNN for TensorRT ${TensorRT_VERSION_STRING}: ${CUDNN_LIBRARY}")
+        link_directories(${_cudnn_dir})
+    else()
+        message(WARNING "TensorRT ${TensorRT_VERSION_STRING} needs cuDNN 8 but it was not found; "
+                        "linking relies on --allow-shlib-undefined and runtime needs libcudnn.so.8 "
+                        "on LD_LIBRARY_PATH (pass -DCUDNN_ROOT=<dir> to silence this).")
+    endif()
+endif()
+
+# Be resilient to transitive shared-lib dependencies of the prebuilt TensorRT
+# libraries that are not on the dev link path (e.g. cuDNN for TensorRT 8). They
+# are resolved at runtime via LD_LIBRARY_PATH.
+add_link_options(-Wl,--allow-shlib-undefined)
+
 # Shared library used by every task.
 add_subdirectory(csrc/core)
 
