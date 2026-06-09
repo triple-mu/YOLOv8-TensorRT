@@ -36,17 +36,15 @@ def main(args: argparse.Namespace) -> None:
         cls_id = int(cls_id)
         cls = CLASSES_CLS[cls_id]
 
-        text = f'{cls}:{score:.3f}'
+        text = f"{cls}:{score:.3f}"
         (_w, _h), _bl = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.8, 1)
         _y1 = min(10, draw.shape[0])
 
-        cv2.rectangle(draw, (10, _y1), (10 + _w, _y1 + _h + _bl), (0, 0, 255),
-                      -1)
-        cv2.putText(draw, text, (10, _y1 + _h), cv2.FONT_HERSHEY_SIMPLEX, 0.75,
-                    (255, 255, 255), 2)
+        cv2.rectangle(draw, (10, _y1), (10 + _w, _y1 + _h + _bl), (0, 0, 255), -1)
+        cv2.putText(draw, text, (10, _y1 + _h), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 255, 255), 2)
 
         if args.show:
-            cv2.imshow('result', draw)
+            cv2.imshow("result", draw)
             cv2.waitKey(0)
         else:
             cv2.imwrite(str(save_image), draw)
@@ -54,23 +52,15 @@ def main(args: argparse.Namespace) -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument('--engine', type=str, help='Engine file')
-    parser.add_argument('--imgs', type=str, help='Images file')
-    parser.add_argument('--show',
-                        action='store_true',
-                        help='Show the detection results')
-    parser.add_argument('--out-dir',
-                        type=str,
-                        default='./output',
-                        help='Path to output file')
-    parser.add_argument('--device',
-                        type=str,
-                        default='cuda:0',
-                        help='TensorRT infer device')
+    parser.add_argument("--engine", type=str, help="Engine file")
+    parser.add_argument("--imgs", type=str, help="Images file")
+    parser.add_argument("--show", action="store_true", help="Show the detection results")
+    parser.add_argument("--out-dir", type=str, default="./output", help="Path to output file")
+    parser.add_argument("--device", type=str, default="cuda:0", help="TensorRT infer device")
     args = parser.parse_args()
     return args
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     args = parse_args()
     main(args)

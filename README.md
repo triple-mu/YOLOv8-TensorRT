@@ -2,7 +2,8 @@
 
 `YOLOv8` using TensorRT accelerate !
 
----
+______________________________________________________________________
+
 [![Build Status](https://img.shields.io/endpoint.svg?url=https%3A%2F%2Factions-badge.atrox.dev%2Fatrox%2Fsync-dotenv%2Fbadge&style=flat)](https://github.com/triple-Mu/YOLOv8-TensorRT)
 [![Python Version](https://img.shields.io/badge/Python-3.8--3.10-FFD43B?logo=python)](https://github.com/triple-Mu/YOLOv8-TensorRT)
 [![img](https://badgen.net/badge/icon/tensorrt?icon=azurepipelines&label)](https://developer.nvidia.com/tensorrt)
@@ -11,8 +12,7 @@
 [![img](https://badgen.net/github/prs/triple-Mu/YOLOv8-TensorRT)](https://github.com/triple-Mu/YOLOv8-TensorRT/pulls)
 [![img](https://img.shields.io/github/stars/triple-Mu/YOLOv8-TensorRT?color=ccf)](https://github.com/triple-Mu/YOLOv8-TensorRT)
 
----
-
+______________________________________________________________________
 
 # Prepare the environment
 
@@ -20,23 +20,23 @@
 
    🚀 RECOMMENDED `CUDA` >= 11.4
 
-2. Install `TensorRT` follow [`TensorRT official website`](https://developer.nvidia.com/nvidia-tensorrt-8x-download).
+1. Install `TensorRT` follow [`TensorRT official website`](https://developer.nvidia.com/nvidia-tensorrt-8x-download).
 
    🚀 RECOMMENDED `TensorRT` >= 8.4
 
-2. Install python requirements.
+1. Install python requirements.
 
-   ``` shell
+   ```shell
    pip install -r requirements.txt
    ```
 
-3. Install [`ultralytics`](https://github.com/ultralytics/ultralytics) package for ONNX export or TensorRT API building.
+1. Install [`ultralytics`](https://github.com/ultralytics/ultralytics) package for ONNX export or TensorRT API building.
 
-   ``` shell
+   ```shell
    pip install ultralytics
    ```
 
-5. Prepare your own PyTorch weight such as `yolov8s.pt` or `yolov8s-seg.pt`.
+1. Prepare your own PyTorch weight such as `yolov8s.pt` or `yolov8s-seg.pt`.
 
 ***NOTICE:***
 
@@ -58,7 +58,7 @@ Besides, other scripts won't work.
 
 You can export your onnx model by `ultralytics` API and add postprocess such as bbox decoder and `NMS` into ONNX model at the same time.
 
-``` shell
+```shell
 python3 export-det.py \
 --weights yolov8s.pt \
 --iou-thres 0.65 \
@@ -84,13 +84,14 @@ python3 export-det.py \
 You will get an onnx model whose prefix is the same as input weights.
 
 # Build End2End Engine from ONNX
+
 ### 1. Build Engine by TensorRT ONNX Python api
 
 You can export TensorRT engine from ONNX by [`build.py` ](build.py).
 
 Usage:
 
-``` shell
+```shell
 python3 build.py \
 --weights yolov8s.onnx \
 --iou-thres 0.65 \
@@ -117,7 +118,7 @@ You can export TensorRT engine by [`trtexec`](https://github.com/NVIDIA/TensorRT
 
 Usage:
 
-``` shell
+```shell
 /usr/src/tensorrt/bin/trtexec \
 --onnx=yolov8s.onnx \
 --saveEngine=yolov8s.engine \
@@ -143,7 +144,7 @@ You can infer images with the engine by [`infer-det.py`](infer-det.py) .
 
 Usage:
 
-``` shell
+```shell
 python3 infer-det.py \
 --engine yolov8s.engine \
 --imgs data \
@@ -169,7 +170,7 @@ You can infer with c++ in [`csrc/detect/end2end`](csrc/detect/end2end) .
 
 Please set you own librarys in [`CMakeLists.txt`](csrc/detect/end2end/CMakeLists.txt) and modify `CLASS_NAMES` and `COLORS` in [`main.cpp`](csrc/detect/end2end/main.cpp).
 
-``` shell
+```shell
 export root=${PWD}
 cd csrc/detect/end2end
 mkdir -p build && cd build
@@ -181,7 +182,7 @@ cd ${root}
 
 Usage:
 
-``` shell
+```shell
 # infer image
 ./yolov8 yolov8s.engine data/bus.jpg
 # infer images
@@ -221,7 +222,7 @@ If you want to profile the TensorRT engine:
 
 Usage:
 
-``` shell
+```shell
 python3 trt-profile.py --engine yolov8s.engine --device cuda:0
 ```
 
@@ -242,7 +243,7 @@ pip install pycuda
 
 Usage:
 
-``` shell
+```shell
 python3 infer-det-without-torch.py \
 --engine yolov8s.engine \
 --imgs data \

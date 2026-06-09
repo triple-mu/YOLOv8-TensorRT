@@ -9,9 +9,9 @@ from models.utils import blob, letterbox, path_to_list, pose_postprocess
 
 
 def main(args: argparse.Namespace) -> None:
-    if args.method == 'cudart':
+    if args.method == "cudart":
         from models.cudart_api import TRTEngine
-    elif args.method == 'pycuda':
+    elif args.method == "pycuda":
         from models.pycuda_api import TRTEngine
     else:
         raise NotImplementedError
@@ -38,24 +38,27 @@ def main(args: argparse.Namespace) -> None:
         # inference
         data = Engine(tensor)
 
-        bboxes, scores, kpts = pose_postprocess(data, args.conf_thres,
-                                                args.iou_thres)
+        bboxes, scores, kpts = pose_postprocess(data, args.conf_thres, args.iou_thres)
         if bboxes.size == 0:
             # if no bounding box
-            print(f'{image}: no object!')
+            print(f"{image}: no object!")
             continue
         bboxes -= dwdh
         bboxes /= ratio
 
-        for (bbox, score, kpt) in zip(bboxes, scores, kpts):
+        for bbox, score, kpt in zip(bboxes, scores, kpts):
             bbox = bbox.round().astype(np.int32).tolist()
-            color = COLORS['person']
+            color = COLORS["person"]
             cv2.rectangle(draw, bbox[:2], bbox[2:], color, 2)
-            cv2.putText(draw,
-                        f'person:{score:.3f}', (bbox[0], bbox[1] - 2),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.75, [225, 255, 255],
-                        thickness=2)
+            cv2.putText(
+                draw,
+                f"person:{score:.3f}",
+                (bbox[0], bbox[1] - 2),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.75,
+                [225, 255, 255],
+                thickness=2,
+            )
             for i in range(19):
                 if i < 17:
                     px, py, ps = kpt[i]
@@ -75,10 +78,9 @@ def main(args: argparse.Namespace) -> None:
                     pos2_x = round(float(kpt[yi - 1][0] - dw) / ratio)
                     pos2_y = round(float(kpt[yi - 1][1] - dh) / ratio)
 
-                    cv2.line(draw, (pos1_x, pos1_y), (pos2_x, pos2_y),
-                             limb_color, 2)
+                    cv2.line(draw, (pos1_x, pos1_y), (pos2_x, pos2_y), limb_color, 2)
         if args.show:
-            cv2.imshow('result', draw)
+            cv2.imshow("result", draw)
             cv2.waitKey(0)
         else:
             cv2.imwrite(str(save_image), draw)
@@ -86,31 +88,17 @@ def main(args: argparse.Namespace) -> None:
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--engine', type=str, help='Engine file')
-    parser.add_argument('--imgs', type=str, help='Images file')
-    parser.add_argument('--show',
-                        action='store_true',
-                        help='Show the detection results')
-    parser.add_argument('--out-dir',
-                        type=str,
-                        default='./output',
-                        help='Path to output file')
-    parser.add_argument('--conf-thres',
-                        type=float,
-                        default=0.25,
-                        help='Confidence threshold')
-    parser.add_argument('--iou-thres',
-                        type=float,
-                        default=0.65,
-                        help='Confidence threshold')
-    parser.add_argument('--method',
-                        type=str,
-                        default='cudart',
-                        help='CUDART pipeline')
+    parser.add_argument("--engine", type=str, help="Engine file")
+    parser.add_argument("--imgs", type=str, help="Images file")
+    parser.add_argument("--show", action="store_true", help="Show the detection results")
+    parser.add_argument("--out-dir", type=str, default="./output", help="Path to output file")
+    parser.add_argument("--conf-thres", type=float, default=0.25, help="Confidence threshold")
+    parser.add_argument("--iou-thres", type=float, default=0.65, help="Confidence threshold")
+    parser.add_argument("--method", type=str, default="cudart", help="CUDART pipeline")
     args = parser.parse_args()
     return args
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     args = parse_args()
     main(args)

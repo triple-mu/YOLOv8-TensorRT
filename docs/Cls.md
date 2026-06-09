@@ -13,7 +13,7 @@ You can leave this repo and use the original `ultralytics` repo for onnx export.
 
 You can export your onnx model by `ultralytics` API.
 
-``` shell
+```shell
 yolo export model=yolov8s-cls.pt format=onnx opset=11 simplify=True
 ```
 
@@ -34,7 +34,7 @@ You can export TensorRT engine by [`trtexec`](https://github.com/NVIDIA/TensorRT
 
 Usage:
 
-``` shell
+```shell
 /usr/src/tensorrt/bin/trtexec \
 --onnx=yolov8s-cls.onnx \
 --saveEngine=yolov8s-cls.engine \
@@ -70,7 +70,7 @@ You can infer images with the engine by [`infer-cls.py`](../infer-cls.py) .
 
 Usage:
 
-``` shell
+```shell
 python3 infer-cls.py \
 --engine yolov8s-cls.engine \
 --imgs data \
@@ -93,11 +93,11 @@ You can infer with c++ in [`csrc/cls/normal`](../csrc/cls/normal) .
 
 ### Build:
 
-Please set you own librarys in [`CMakeLists.txt`](../csrc/cls/normal/CMakeLists.txt) and modify `CLASS_NAMES`  in [`main.cpp`](../csrc/cls/normal/main.cpp).
+Please set you own librarys in [`CMakeLists.txt`](../csrc/cls/normal/CMakeLists.txt) and modify `CLASS_NAMES` in [`main.cpp`](../csrc/cls/normal/main.cpp).
 
 And build:
 
-``` shell
+```shell
 export root=${PWD}
 cd src/cls/normal
 mkdir build
@@ -109,7 +109,7 @@ cd ${root}
 
 Usage:
 
-``` shell
+```shell
 # infer image
 ./yolov8-cls yolov8s-cls.engine data/bus.jpg
 # infer images

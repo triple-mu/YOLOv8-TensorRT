@@ -13,7 +13,7 @@ You can leave this repo and use the original `ultralytics` repo for onnx export.
 
 You can export your onnx model by `ultralytics` API.
 
-``` shell
+```shell
 yolo export model=yolov8s-pose.pt format=onnx opset=11 simplify=True
 ```
 
@@ -34,7 +34,7 @@ You can export TensorRT engine by [`trtexec`](https://github.com/NVIDIA/TensorRT
 
 Usage:
 
-``` shell
+```shell
 /usr/src/tensorrt/bin/trtexec \
 --onnx=yolov8s-pose.onnx \
 --saveEngine=yolov8s-pose.engine \
@@ -70,7 +70,7 @@ You can infer images with the engine by [`infer-pose.py`](../infer-pose.py) .
 
 Usage:
 
-``` shell
+```shell
 python3 infer-pose.py \
 --engine yolov8s-pose.engine \
 --imgs data \
@@ -94,7 +94,7 @@ You can infer with c++ in [`csrc/pose/normal`](../csrc/pose/normal) .
 ### Build:
 
 Please set you own librarys in [`CMakeLists.txt`](../csrc/pose/normal/CMakeLists.txt) and modify `KPS_COLORS`
-and `SKELETON` and  `LIMB_COLORS`  in [`main.cpp`](../csrc/pose/normal/main.cpp).
+and `SKELETON` and `LIMB_COLORS` in [`main.cpp`](../csrc/pose/normal/main.cpp).
 
 Besides, you can modify the postprocess parameters such as `score_thres` and `iou_thres` and `topk`
 in [`main.cpp`](../csrc/pose/normal/main.cpp).
@@ -107,7 +107,7 @@ float iou_thres = 0.65f;
 
 And build:
 
-``` shell
+```shell
 export root=${PWD}
 cd src/pose/normal
 mkdir build
@@ -119,7 +119,7 @@ cd ${root}
 
 Usage:
 
-``` shell
+```shell
 # infer image
 ./yolov8-pose yolov8s-pose.engine data/bus.jpg
 # infer images

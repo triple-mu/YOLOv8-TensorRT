@@ -53,7 +53,7 @@ Please modify `CLASS_NAMES` and `COLORS` in [`main.cpp`](../csrc/jetson/detect/m
 
 And build:
 
-``` shell
+```shell
 export root=${PWD}
 cd src/jetson/detect
 mkdir build
@@ -65,7 +65,7 @@ cd ${root}
 
 Usage:
 
-``` shell
+```shell
 # infer image
 ./yolov8 yolov8s.engine data/bus.jpg
 # infer images
@@ -123,7 +123,7 @@ float iou_thres = 0.65f;
 
 And build:
 
-``` shell
+```shell
 export root=${PWD}
 cd src/jetson/segment
 mkdir build
@@ -135,7 +135,7 @@ cd ${root}
 
 Usage:
 
-``` shell
+```shell
 # infer image
 ./yolov8-seg yolov8s-seg.engine data/bus.jpg
 # infer images
@@ -190,7 +190,7 @@ float iou_thres = 0.65f;
 
 And build:
 
-``` shell
+```shell
 export root=${PWD}
 cd src/jetson/pose
 mkdir build
@@ -202,7 +202,7 @@ cd ${root}
 
 Usage:
 
-``` shell
+```shell
 # infer image
 ./yolov8-pose yolov8s-pose.engine data/bus.jpg
 # infer images

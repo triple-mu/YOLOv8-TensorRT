@@ -17,8 +17,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```
 
 1. **导出 ONNX**：需要 PyTorch + `ultralytics`。
-2. **构建 Engine**：`.onnx → .engine`，可用 `build.py`、`trtexec`，或 TensorRT Python API（`gen_pkl.py` + `build.py`，见 `docs/API-Build.md`）。
-3. **推理**：加载 `.engine`，前处理 → 推理 → 后处理 → 可视化。
+1. **构建 Engine**：`.onnx → .engine`，可用 `build.py`、`trtexec`，或 TensorRT Python API（`gen_pkl.py` + `build.py`，见 `docs/API-Build.md`）。
+1. **推理**：加载 `.engine`，前处理 → 推理 → 后处理 → 可视化。
 
 ### 两条部署哲学（关键区分）
 

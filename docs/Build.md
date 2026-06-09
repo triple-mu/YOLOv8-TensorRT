@@ -25,13 +25,13 @@ export LD_LIBRARY_PATH=/data/TensorRT-10.16.1.11/lib:/usr/local/cuda/lib64:$LD_L
 
 ## What the build auto-detects
 
-| Concern | Handled by | Behaviour |
-| --- | --- | --- |
-| TensorRT location | `cmake/FindTensorRT.cmake` | searches `TensorRT_ROOT`, then `/data/TensorRT-*`, then `/usr` |
-| TensorRT version | `cmake/FindTensorRT.cmake` | parses `NvInferVersion.h`, including the **enterprise** indirection (`NV_TENSORRT_MAJOR → TRT_MAJOR_ENTERPRISE`) |
-| TRT 8 vs 10 API | `cmake/TrtDefs.cmake` → `-DTRT_10` (major ≥ 10) | one `trt_compat.hpp` switches binding-index vs tensor-name API, `enqueueV2` vs `enqueueV3`, `destroy()` vs `delete` |
-| OpenCV ≥ 4.7 | `cmake/TrtDefs.cmake` → `-DBATCHED_NMS` | uses class-aware `NMSBoxesBatched` instead of class-agnostic `NMSBoxes` |
-| cuDNN for TRT < 10 | top `CMakeLists.txt` | finds cuDNN 8 (needed by `libnvinfer_plugin` on TRT 8); links `--allow-shlib-undefined` so a missing dev copy never breaks the link |
+| Concern            | Handled by                                      | Behaviour                                                                                                                           |
+| ------------------ | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| TensorRT location  | `cmake/FindTensorRT.cmake`                      | searches `TensorRT_ROOT`, then `/data/TensorRT-*`, then `/usr`                                                                      |
+| TensorRT version   | `cmake/FindTensorRT.cmake`                      | parses `NvInferVersion.h`, including the **enterprise** indirection (`NV_TENSORRT_MAJOR → TRT_MAJOR_ENTERPRISE`)                    |
+| TRT 8 vs 10 API    | `cmake/TrtDefs.cmake` → `-DTRT_10` (major ≥ 10) | one `trt_compat.hpp` switches binding-index vs tensor-name API, `enqueueV2` vs `enqueueV3`, `destroy()` vs `delete`                 |
+| OpenCV ≥ 4.7       | `cmake/TrtDefs.cmake` → `-DBATCHED_NMS`         | uses class-aware `NMSBoxesBatched` instead of class-agnostic `NMSBoxes`                                                             |
+| cuDNN for TRT < 10 | top `CMakeLists.txt`                            | finds cuDNN 8 (needed by `libnvinfer_plugin` on TRT 8); links `--allow-shlib-undefined` so a missing dev copy never breaks the link |
 
 ## Selecting a TensorRT version
 
