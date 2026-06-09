@@ -85,19 +85,44 @@ double infer_once(Engine& engine, const cv::Mat& image, cv::Mat& res, std::vecto
 }
 
 // Optional per-object dump (YOLOV8_VERBOSE=1), used for cross-checking against references.
+// Prints a comparable signature per task: rotated box for obb, plus a keypoint
+// checksum / mask pixel count when present.
 void dump_objects(const std::vector<Object>& objs)
 {
     if (std::getenv("YOLOV8_VERBOSE") == nullptr) {
         return;
     }
     for (const auto& o : objs) {
-        std::printf("  label=%d prob=%.4f box=[%.2f, %.2f, %.2f, %.2f]\n",
-                    o.label,
-                    o.prob,
-                    o.rect.x,
-                    o.rect.y,
-                    o.rect.x + o.rect.width,
-                    o.rect.y + o.rect.height);
+        if (o.has_rrect) {
+            std::printf("  label=%d prob=%.4f rrect=[%.2f, %.2f, %.2f, %.2f, %.2f]",
+                        o.label,
+                        o.prob,
+                        o.rrect.center.x,
+                        o.rrect.center.y,
+                        o.rrect.size.width,
+                        o.rrect.size.height,
+                        o.rrect.angle);
+        }
+        else {
+            std::printf("  label=%d prob=%.4f box=[%.2f, %.2f, %.2f, %.2f]",
+                        o.label,
+                        o.prob,
+                        o.rect.x,
+                        o.rect.y,
+                        o.rect.x + o.rect.width,
+                        o.rect.y + o.rect.height);
+        }
+        if (!o.kps.empty()) {
+            double s = 0;
+            for (float v : o.kps) {
+                s += v;
+            }
+            std::printf(" kps_sum=%.2f", s);
+        }
+        if (!o.boxMask.empty()) {
+            std::printf(" mask_px=%d", cv::countNonZero(o.boxMask));
+        }
+        std::printf("\n");
     }
 }
 

@@ -12,4 +12,10 @@ void draw_detections(const cv::Mat&                  image,
                      const std::vector<Object>&      objs,
                      const std::vector<std::string>& names);
 
+// Draws labelled boxes plus translucent mask overlays. Shared by the segmentation tasks.
+void draw_segments(const cv::Mat&                  image,
+                   cv::Mat&                        res,
+                   const std::vector<Object>&      objs,
+                   const std::vector<std::string>& names);
+
 }  // namespace yolov8

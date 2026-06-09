@@ -54,6 +54,14 @@ void Engine::load_engine(const std::string& engine_path)
             output_bindings_.push_back(binding);
         }
     }
+
+    // Adopt the engine's static input resolution (e.g. 640 for detect, 224 for cls).
+    if (!input_bindings_.empty()) {
+        const nvinfer1::Dims& d = input_bindings_[0].dims;
+        if (d.nbDims == 4 && d.d[2] > 0 && d.d[3] > 0) {
+            config_.input_size = cv::Size(static_cast<int>(d.d[3]), static_cast<int>(d.d[2]));
+        }
+    }
 }
 
 void Engine::make_pipe()

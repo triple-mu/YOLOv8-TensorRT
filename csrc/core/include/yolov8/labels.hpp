@@ -16,6 +16,9 @@ const std::vector<std::string>& coco_labels();
 // 80-entry color palette (cycled if more classes are requested).
 const Palette& palette();
 
+// 20-entry palette for segmentation mask overlays.
+const Palette& mask_palette();
+
 namespace pose {
 const Palette&                                kps_colors();   // 17 keypoint colors
 const Palette&                                limb_colors();  // 19 limb colors
