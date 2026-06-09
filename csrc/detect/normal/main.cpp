@@ -1,7 +1,8 @@
+#include "opencv2/opencv.hpp"
+#include "yolov8/draw.hpp"
 #include "yolov8/engine.hpp"
 #include "yolov8/labels.hpp"
 #include "yolov8/runner.hpp"
-#include "opencv2/opencv.hpp"
 #include <algorithm>
 #include <cstdio>
 #include <iostream>
@@ -11,9 +12,9 @@
 using namespace yolov8;
 
 // YOLOv8 detection: a single output [1, 4+num_classes, num_anchors].
-class DetectEngine : public Engine {
+class DetectEngine: public Engine {
 public:
-    DetectEngine(const std::string& engine_path, const InferConfig& config) : Engine(engine_path, config)
+    DetectEngine(const std::string& engine_path, const InferConfig& config): Engine(engine_path, config)
     {
         class_names_ = config.labels_path.empty() ? coco_labels() : load_labels(config.labels_path);
     }
@@ -79,31 +80,7 @@ public:
 
     void draw(const cv::Mat& image, cv::Mat& res, const std::vector<Object>& objs) const override
     {
-        const Palette& colors = palette();
-        res                   = image.clone();
-        for (const auto& obj : objs) {
-            const Color& c = colors[obj.label % colors.size()];
-            cv::Scalar   color(c[0], c[1], c[2]);
-            cv::rectangle(res, obj.rect, color, 2);
-
-            const std::string name = obj.label < static_cast<int>(class_names_.size())
-                                         ? class_names_[obj.label]
-                                         : std::to_string(obj.label);
-            char text[256];
-            std::snprintf(text, sizeof(text), "%s %.1f%%", name.c_str(), obj.prob * 100);
-
-            int      base_line = 0;
-            cv::Size label_size = cv::getTextSize(text, cv::FONT_HERSHEY_SIMPLEX, 0.4, 1, &base_line);
-
-            const int x = static_cast<int>(obj.rect.x);
-            int       y = static_cast<int>(obj.rect.y) + 1;
-            if (y > res.rows) {
-                y = res.rows;
-            }
-            cv::rectangle(res, cv::Rect(x, y, label_size.width, label_size.height + base_line), {0, 0, 255}, -1);
-            cv::putText(res, text, cv::Point(x, y + label_size.height), cv::FONT_HERSHEY_SIMPLEX, 0.4,
-                        {255, 255, 255}, 1);
-        }
+        draw_detections(image, res, objs, class_names_);
     }
 
 private:

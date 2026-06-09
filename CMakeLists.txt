@@ -32,6 +32,7 @@ add_subdirectory(csrc/core)
 
 # Task executables (added as each is migrated to the core library).
 add_subdirectory(csrc/detect/normal)
+add_subdirectory(csrc/detect/end2end)
 
 # Platform targets — off by default (cannot be validated on this x86 host).
 option(BUILD_JETSON "Build Jetson (aarch64) targets" OFF)

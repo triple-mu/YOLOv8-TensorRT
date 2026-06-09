@@ -75,7 +75,8 @@ def main(args):
             f,
             opset_version=args.opset,
             input_names=['images'],
-            output_names=['num_dets', 'bboxes', 'scores', 'labels'])
+            output_names=['num_dets', 'bboxes', 'scores', 'labels'],
+            dynamo=False)
         f.seek(0)
         onnx_model = onnx.load(f)
     onnx.checker.check_model(onnx_model)

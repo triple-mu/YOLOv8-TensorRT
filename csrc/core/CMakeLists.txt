@@ -5,6 +5,7 @@ add_library(yolov8_core STATIC
     src/labels.cpp
     src/config.cpp
     src/runner.cpp
+    src/draw.cpp
 )
 
 target_include_directories(yolov8_core PUBLIC
