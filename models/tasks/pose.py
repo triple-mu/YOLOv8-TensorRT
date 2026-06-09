@@ -1,0 +1,60 @@
+import cv2
+import numpy as np
+
+from config import COLORS, KPS_COLORS, LIMB_COLORS, SKELETON
+from models.utils import blob, letterbox
+
+
+def process(engine, bgr, draw, ctx) -> bool:
+    img, ratio, dwdh = letterbox(bgr, (ctx.width, ctx.height))
+    dw, dh = int(dwdh[0]), int(dwdh[1])
+    rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    tensor = blob(rgb, return_seg=False)
+
+    if ctx.torch:
+        import torch
+
+        from models.torch_utils import pose_postprocess
+
+        dwdh_arr = torch.asarray(dwdh * 2, dtype=torch.float32, device=ctx.device)
+        data = engine(torch.asarray(tensor, device=ctx.device))
+        bboxes, scores, kpts = pose_postprocess(data, ctx.conf_thres, ctx.iou_thres)
+        empty = bboxes.numel() == 0
+    else:
+        from models.utils import pose_postprocess
+
+        dwdh_arr = np.array(dwdh * 2, dtype=np.float32)
+        data = engine(np.ascontiguousarray(tensor))
+        bboxes, scores, kpts = pose_postprocess(data, ctx.conf_thres, ctx.iou_thres)
+        empty = bboxes.size == 0
+
+    if empty:
+        return False
+    bboxes -= dwdh_arr
+    bboxes /= ratio
+
+    for bbox, score, kpt in zip(bboxes, scores, kpts):
+        bbox = (bbox.round().int() if ctx.torch else bbox.round().astype(np.int32)).tolist()
+        cv2.rectangle(draw, bbox[:2], bbox[2:], COLORS["person"], 2)
+        cv2.putText(
+            draw,
+            f"person:{float(score):.3f}",
+            (bbox[0], bbox[1] - 2),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.75,
+            [225, 255, 255],
+            2,
+        )
+        for i in range(19):
+            if i < 17:
+                px, py, ps = kpt[i]
+                if ps > 0.5:
+                    cv2.circle(
+                        draw, (round(float(px - dw) / ratio), round(float(py - dh) / ratio)), 5, KPS_COLORS[i], -1
+                    )
+            xi, yi = SKELETON[i]
+            if kpt[xi - 1][2] > 0.5 and kpt[yi - 1][2] > 0.5:
+                p1 = (round(float(kpt[xi - 1][0] - dw) / ratio), round(float(kpt[xi - 1][1] - dh) / ratio))
+                p2 = (round(float(kpt[yi - 1][0] - dw) / ratio), round(float(kpt[yi - 1][1] - dh) / ratio))
+                cv2.line(draw, p1, p2, LIMB_COLORS[i], 2)
+    return True
