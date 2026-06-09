@@ -93,7 +93,7 @@ export LD_LIBRARY_PATH=/path/to/TensorRT/lib:$LD_LIBRARY_PATH
 ./build/bin/yolov8_detect yolov8s.engine data/bus.jpg --out-dir output   # --show / --profile
 ```
 
-目标：`yolov8_detect`、`yolov8_detect_e2e`、`yolov8_seg`、`yolov8_seg_simple`、`yolov8_pose`、`yolov8_obb`、`yolov8_cls`。构建细节、多版本 TensorRT/OpenCV、TensorRT 8 的 cuDNN 依赖与 C++14 回退见 [docs/Build.md](docs/Build.md)。类别名在 `data/labels/*.txt`（用 `--labels` 指定）；各任务说明见 [docs/](docs/)。
+目标：`yolov8_detect`、`yolov8_detect_e2e`、`yolov8_seg`、`yolov8_seg_simple`、`yolov8_pose`、`yolov8_obb`、`yolov8_cls`。构建细节、多版本 TensorRT/OpenCV、TensorRT 8 的 cuDNN 依赖与 C++14 回退见 [docs/Build.md](docs/Build.md)。类别名在 `data/labels/*.txt`（用 `--labels` 指定）。
 
 ## 性能分析与基准
 
@@ -114,7 +114,7 @@ cmake -S . -B build -DBUILD_TESTS=ON && ctest --test-dir build   # C++ 单元测
 ## 部署说明
 
 - **DeepStream**：解析插件见 [csrc/deepstream](csrc/deepstream/README.md)（`-DBUILD_DEEPSTREAM=ON`，需 DeepStream SDK）。
-- **Jetson**：在设备上用 `-DTensorRT_ROOT` 指向 aarch64 的 TensorRT 直接构建同样的目标，无需单独源码。见 [docs/Jetson.md](docs/Jetson.md)。
+- **Jetson**：在设备上用 `-DTensorRT_ROOT` 指向 aarch64 的 TensorRT 直接构建同样的目标，无需单独源码（见 [docs/Build.md](docs/Build.md)）。
 
 ## 致谢
 
