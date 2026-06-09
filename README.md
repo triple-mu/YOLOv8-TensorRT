@@ -1,6 +1,6 @@
 # YOLOv8-TensorRT
 
-`YOLOv8` inference accelerated with `TensorRT` — detection, segmentation, pose, oriented boxes and classification, from Python and C++.
+`YOLOv8` inference accelerated with `TensorRT` — detection, segmentation, pose, oriented boxes and classification, from Python **and** C++.
 
 **English** | [简体中文](README.zh-CN.md)
 
@@ -11,13 +11,27 @@ ______________________________________________________________________
 [![C++](https://img.shields.io/badge/CPP-14%2F17-yellow)](https://github.com/triple-Mu/YOLOv8-TensorRT)
 [![License](https://badgen.net/github/license/triple-Mu/YOLOv8-TensorRT)](LICENSE)
 
+Take a trained `ultralytics` YOLOv8 model, export it to ONNX, build a TensorRT engine, and run it from Python or a small C++ binary — for any of the five tasks. The Python and C++ sides share the same engines and class files; the build adapts itself to whatever TensorRT and OpenCV you have.
+
 ## Highlights
 
-- **One shared C++ core** (`libyolov8_core`): RAII-managed TensorRT/CUDA resources, exceptions instead of `assert`, and a single `trt_compat` layer that is the only place branching on the TensorRT version.
-- **Version-agnostic build**: auto-detects TensorRT (8 ↔ 10/11, including enterprise headers) and OpenCV (`≥4.7` enables class-aware NMS); see [docs/Build.md](docs/Build.md). Verified on TensorRT 8.6 / 10.8 / 10.16 / 11.0.
-- **C++14 fallback**: uses `std::filesystem` on C++17, otherwise a vendored `ghc::filesystem` (build with `-DCMAKE_CXX_STANDARD=14`).
-- **One Python entry point**: `infer.py --task {det,seg,pose,obb,cls} --backend {torch,cudart,pycuda}` replaces the old per-task scripts; the cudart/pycuda backends now run on TensorRT 10.
-- Unit tests (pytest + ctest), a `--profile` per-layer report and a `benchmark.py`.
+- **One shared C++ core** (`libyolov8_core`): RAII-managed TensorRT/CUDA resources, exceptions instead of `assert`, and a single `trt_compat` layer that is the *only* place branching on the TensorRT version.
+- **Version-agnostic build**: auto-detects TensorRT (8 ↔ 10/11, including enterprise headers) and OpenCV (`≥4.7` switches to class-aware NMS); see [docs/Build.md](docs/Build.md). Verified on TensorRT **8.6 / 10.8 / 10.16 / 11.0** and OpenCV **4.5 / 4.6 / 4.11**.
+- **C++14 fallback**: `std::filesystem` on C++17, otherwise a vendored `ghc::filesystem` (`-DCMAKE_CXX_STANDARD=14`).
+- **One Python entry point**: `infer.py --task {det,seg,pose,obb,cls} --backend {torch,cudart,pycuda}` replaces ten per-task scripts; the cudart/pycuda backends now run on TensorRT 10.
+- Unit tests (pytest + ctest), a `--profile` per-layer report, and `benchmark.py`.
+
+## Supported tasks
+
+| Task           | `infer.py --task` | C++ binary                                            | Export (ONNX)                  |
+| -------------- | ----------------- | ----------------------------------------------------- | ------------------------------ |
+| Detection      | `det`             | `yolov8_detect` (raw) · `yolov8_detect_e2e` (End2End) | `export-det.py` or ultralytics |
+| Segmentation   | `seg`             | `yolov8_seg` · `yolov8_seg_simple`                    | `export-seg.py` or ultralytics |
+| Pose           | `pose`            | `yolov8_pose`                                         | ultralytics                    |
+| Oriented boxes | `obb`             | `yolov8_obb`                                          | ultralytics                    |
+| Classification | `cls`             | `yolov8_cls`                                          | ultralytics                    |
+
+> **Engine layouts.** `export-det.py` produces an **End2End** detection engine with NMS baked in (outputs `num_dets, bboxes, scores, labels`); `export-seg.py` produces a segmentation engine (outputs `outputs, proto`); the native `ultralytics` export keeps the model's **raw** output (e.g. `[1, 84, anchors]`). Match the engine to its consumer: `infer.py --task det` and `yolov8_detect_e2e` need the End2End engine, `infer.py --task seg` needs the `export-seg.py` engine, while `yolov8_detect` and the pose/obb/cls paths take the raw ultralytics export.
 
 ## Layout
 
@@ -34,14 +48,13 @@ infer.py  build.py  export-det.py  export-seg.py  benchmark.py
 
 ## Setup
 
-Install `CUDA` (≥ 11.4) and `TensorRT` (≥ 8.4), then:
+`CUDA` (≥ 11.4) and `TensorRT` (≥ 8.4) must already be installed system-wide — `nvidia-smi` and `trtexec --version` should both work. Then install the Python deps:
 
 ```shell
 pip install -r requirements.txt
-pip install ultralytics            # for ONNX export
-# optional non-torch inference backends:
-pip install cuda-python            # --backend cudart
-pip install pycuda                 # --backend pycuda
+pip install ultralytics            # ONNX export
+pip install cuda-python            # optional: infer.py --backend cudart
+pip install pycuda                 # optional: infer.py --backend pycuda
 ```
 
 ## Workflow
@@ -50,7 +63,9 @@ pip install pycuda                 # --backend pycuda
 
 ### 1. Export ONNX
 
-End2End (NMS baked in, detection/segmentation):
+(`ultralytics` downloads pretrained weights such as `yolov8s.pt` automatically on first use.)
+
+End2End (NMS baked in — detection / segmentation):
 
 ```shell
 python export-det.py --weights yolov8s.pt --sim --input-shape 1 3 640 640 \
@@ -58,7 +73,11 @@ python export-det.py --weights yolov8s.pt --sim --input-shape 1 3 640 640 \
 python export-seg.py --weights yolov8s-seg.pt --sim --device cuda:0
 ```
 
-Pose / OBB / Cls (and "normal" detection without baked-in NMS) use the native ultralytics export, e.g. `yolo export model=yolov8s-pose.pt format=onnx opset=11 simplify`.
+Raw export (pose / obb / cls, and detection/segmentation without baked-in NMS) uses ultralytics:
+
+```shell
+yolo export model=yolov8s-pose.pt format=onnx opset=11 simplify
+```
 
 ### 2. Build the engine
 
@@ -68,7 +87,7 @@ python build.py --weights yolov8s.onnx --fp16 --device cuda:0
 /path/to/tensorrt/bin/trtexec --onnx=yolov8s.onnx --saveEngine=yolov8s.engine --fp16
 ```
 
-### 3. Inference (Python)
+### 3. Inference — Python
 
 ```shell
 python infer.py --task det  --backend torch  --engine yolov8s.engine     --imgs data --out-dir output
@@ -81,41 +100,63 @@ python infer.py --task pose --backend pycuda --engine yolov8s-pose.engine --imgs
 | `--task`                     | `det` / `seg` / `pose` / `obb` / `cls`              |
 | `--backend`                  | `torch` (PyTorch), `cudart` (cuda-python), `pycuda` |
 | `--engine` `--imgs`          | engine file; image file or directory                |
-| `--show` / `--out-dir`       | display window, or save to a directory              |
-| `--conf-thres` `--iou-thres` | thresholds (seg/pose/obb)                           |
+| `--show` / `--out-dir`       | display in a window, or save to a directory         |
+| `--conf-thres` `--iou-thres` | thresholds (seg / pose / obb)                       |
+| `--device`                   | torch device, e.g. `cuda:0` (torch backend)         |
 
-### 4. Inference (C++)
+### 4. Inference — C++
 
 ```shell
 cmake -S . -B build -DTensorRT_ROOT=/path/to/TensorRT
 cmake --build build -j
 export LD_LIBRARY_PATH=/path/to/TensorRT/lib:$LD_LIBRARY_PATH
-./build/bin/yolov8_detect yolov8s.engine data/bus.jpg --out-dir output   # --show / --profile
+./build/bin/yolov8_detect yolov8s.engine data/bus.jpg --out-dir output   # --show / --profile / --labels
 ```
 
-Targets: `yolov8_detect`, `yolov8_detect_e2e`, `yolov8_seg`, `yolov8_seg_simple`, `yolov8_pose`, `yolov8_obb`, `yolov8_cls`. Build details, multiple TensorRT/OpenCV versions, cuDNN for TensorRT 8 and the C++14 fallback are in [docs/Build.md](docs/Build.md). Class names live in `data/labels/*.txt` (pass `--labels`).
+Build details, multiple TensorRT/OpenCV versions, cuDNN for TensorRT 8 and the C++14 fallback are in **[docs/Build.md](docs/Build.md)**. Class names live in `data/labels/*.txt` (override with `--labels`).
 
-## Profiling & benchmark
+## Performance
+
+`benchmark.py` over the cudart backend (host-to-host: H2D + execute + D2H), `yolov8n` FP16, 640×640 (cls 224×224), on an RTX 3080 Ti Laptop / CUDA 12.8 / TensorRT 10.16:
+
+| Task           | latency (mean) | throughput |
+| -------------- | -------------- | ---------- |
+| Detection      | 2.46 ms        | 406 qps    |
+| Segmentation   | 3.43 ms        | 292 qps    |
+| Pose           | 2.28 ms        | 439 qps    |
+| Oriented boxes | 1.97 ms        | 507 qps    |
+| Classification | 0.33 ms        | 3033 qps   |
 
 ```shell
-./build/bin/yolov8_detect yolov8s.engine data/bus.jpg --profile   # per-layer C++ timing
-python benchmark.py --engine yolov8s.engine --runs 200            # latency / throughput
-python trt-profile.py --engine yolov8s.engine --device cuda:0     # Python layer profile
+python benchmark.py --engine yolov8s.engine --runs 200          # latency / throughput
+./build/bin/yolov8_detect yolov8s.engine data/bus.jpg --profile  # per-layer C++ timing
+python trt-profile.py --engine yolov8s.engine --device cuda:0    # Python layer profile
 ```
 
 ## Development
 
 ```shell
-pre-commit install                 # ruff + clang-format + mdformat on commit
+pre-commit install                 # ruff + clang-format + mdformat run on every commit
 python -m pytest tests/            # Python unit tests
 cmake -S . -B build -DBUILD_TESTS=ON && ctest --test-dir build   # C++ unit tests
 ```
 
-## Deployment notes
+## Troubleshooting
 
-- **DeepStream**: parser plugin in [csrc/deepstream](csrc/deepstream/README.md) (`-DBUILD_DEEPSTREAM=ON`, needs the DeepStream SDK).
-- **Jetson**: build the same targets on-device with `-DTensorRT_ROOT` pointing at the aarch64 TensorRT — no separate sources needed (see [docs/Build.md](docs/Build.md)).
+- **`libnvinfer.so: cannot open shared object file`** at runtime — add the TensorRT `lib/` (and `/usr/local/cuda/lib64`) to `LD_LIBRARY_PATH`.
+- **Engine fails to deserialize** — a `.engine` is tied to the exact TensorRT version that built it; rebuild it with the same TensorRT you link/run against.
+- **TensorRT 8 link error `undefined reference to cudnn*`** — TensorRT 8 plugins need cuDNN 8; pass `-DCUDNN_ROOT=<dir>` (e.g. a conda `cudnn=8` env) and put it on `LD_LIBRARY_PATH`. TensorRT 10+ dropped this dependency.
+- **ONNX export gives a tiny / empty engine** — on PyTorch 2.x pass `dynamo=False` to `torch.onnx.export` (already set in `export-det.py` / `export-seg.py`).
+- **TensorRT 11 `trtexec` says "model not found"** — pass an **absolute** `--onnx=` path.
+- **`--show` does nothing on a headless box** — drop `--show` and use `--out-dir` to save annotated images.
+
+## Deployment
+
+- **DeepStream** — bbox parser plugin in [csrc/deepstream](csrc/deepstream/README.md); build with `-DBUILD_DEEPSTREAM=ON` (needs the DeepStream SDK).
+- **Jetson** — build the same targets on-device with `-DTensorRT_ROOT` pointing at the aarch64 TensorRT; no separate sources (see [docs/Build.md](docs/Build.md)).
 
 ## Acknowledgments
 
-Bundled third-party code (ghc::filesystem, TensorRT samples) is credited in [ACKNOWLEDGMENTS.md](ACKNOWLEDGMENTS.md). Licensed under [MIT](LICENSE).
+Bundled third-party code (`ghc::filesystem`, TensorRT samples) is credited in [ACKNOWLEDGMENTS.md](ACKNOWLEDGMENTS.md). Licensed under [MIT](LICENSE).
+
+[![Star History](https://api.star-history.com/svg?repos=triple-Mu/YOLOv8-TensorRT&type=Date)](https://star-history.com/#triple-Mu/YOLOv8-TensorRT&Date)

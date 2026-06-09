@@ -17,15 +17,16 @@ get_filename_component(CUDA_LIB_DIR ${CUDA_LIBRARIES} DIRECTORY)
 message(STATUS "CUDA Headers: \n${CUDA_INCLUDE_DIRS}\n")
 
 
-# TensorRT
-set(TensorRT_INCLUDE_DIRS /usr/include/x86_64-linux-gnu)
-set(TensorRT_LIBRARIES /usr/lib/x86_64-linux-gnu)
+# TensorRT — override with -DTensorRT_INCLUDE_DIRS=... -DTensorRT_LIBRARIES=...
+set(TensorRT_INCLUDE_DIRS /usr/include/x86_64-linux-gnu CACHE PATH "TensorRT headers")
+set(TensorRT_LIBRARIES /usr/lib/x86_64-linux-gnu CACHE PATH "TensorRT libraries")
 
 message(STATUS "TensorRT Libs: \n${TensorRT_LIBRARIES}\n")
 message(STATUS "TensorRT Headers: \n${TensorRT_INCLUDE_DIRS}\n")
 
 
-set(DEEPSTREAM /opt/nvidia/deepstream/deepstream)
+# DeepStream SDK root — override with -DDEEPSTREAM=/opt/nvidia/deepstream/deepstream-X.Y
+set(DEEPSTREAM /opt/nvidia/deepstream/deepstream CACHE PATH "DeepStream SDK root")
 set(DS_LIBRARIES ${DEEPSTREAM}/lib)
 set(DS_INCLUDE_DIRS ${DEEPSTREAM}/sources/includes)
 message(STATUS "DS Libs: \n${DS_LIBRARIES}\n")
