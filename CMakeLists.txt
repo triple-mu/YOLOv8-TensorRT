@@ -1,7 +1,11 @@
 cmake_minimum_required(VERSION 3.18)
 project(yolov8_trt LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 17)
+# Default to C++17 (std::filesystem). Override with -DCMAKE_CXX_STANDARD=14 to
+# build against the vendored ghc::filesystem fallback for older toolchains.
+if(NOT CMAKE_CXX_STANDARD)
+    set(CMAKE_CXX_STANDARD 17)
+endif()
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 

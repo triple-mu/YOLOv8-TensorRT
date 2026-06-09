@@ -10,7 +10,8 @@
 #include <cuda_runtime_api.h>
 #include <string>
 
-namespace yolov8::compat {
+namespace yolov8 {
+namespace compat {
 
 inline int num_io_tensors(nvinfer1::ICudaEngine* engine)
 {
@@ -122,4 +123,5 @@ inline void trt_destroy(T* ptr)
 #endif
 }
 
-}  // namespace yolov8::compat
+}  // namespace compat
+}  // namespace yolov8
