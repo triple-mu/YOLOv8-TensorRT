@@ -13,7 +13,7 @@ You can leave this repo and use the original `ultralytics` repo for onnx export.
 
 You can export your onnx model by `ultralytics` API.
 
-``` shell
+```shell
 yolo export model=yolov8s-obb.pt format=onnx opset=11 simplify=True
 ```
 
@@ -34,7 +34,7 @@ You can export TensorRT engine by [`trtexec`](https://github.com/NVIDIA/TensorRT
 
 Usage:
 
-``` shell
+```shell
 /usr/src/tensorrt/bin/trtexec \
 --onnx=yolov8s-obb.onnx \
 --saveEngine=yolov8s-obb.engine \
@@ -70,7 +70,7 @@ You can infer images with the engine by [`infer-obb.py`](../infer-obb.py) .
 
 Usage:
 
-``` shell
+```shell
 python3 infer-obb.py \
 --engine yolov8s-obb.engine \
 --imgs data \
@@ -100,7 +100,7 @@ Besides, you can modify the postprocess parameters such as `num_labels` and `sco
 
 And build:
 
-``` shell
+```shell
 export root=${PWD}
 cd src/obb/normal
 mkdir build
@@ -112,7 +112,7 @@ cd ${root}
 
 Usage:
 
-``` shell
+```shell
 # infer image
 ./yolov8-obb yolov8s-obb.engine data/bus.jpg
 # infer images

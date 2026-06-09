@@ -22,6 +22,8 @@ __pycache__/
 # Distribution / packaging
 .Python
 build/
+build_*/
+work/
 cmake-build-debug
 develop-eggs/
 dist/

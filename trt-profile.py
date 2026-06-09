@@ -15,15 +15,12 @@ def profile(args):
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--engine', type=str, help='Engine file')
-    parser.add_argument('--device',
-                        type=str,
-                        default='cuda:0',
-                        help='TensorRT infer device')
+    parser.add_argument("--engine", type=str, help="Engine file")
+    parser.add_argument("--device", type=str, default="cuda:0", help="TensorRT infer device")
     args = parser.parse_args()
     return args
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     args = parse_args()
     profile(args)

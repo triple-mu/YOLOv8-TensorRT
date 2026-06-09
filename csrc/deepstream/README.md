@@ -24,8 +24,8 @@ cd build
 cmake ..
 make
 ```
-You will get a lib `libnvdsinfer_custom_bbox_yoloV8.so` in `build`.
 
+You will get a lib `libnvdsinfer_custom_bbox_yoloV8.so` in `build`.
 
 ## 3. Modify the deepstream config
 

@@ -6,7 +6,7 @@
 
 You can export your onnx model by `ultralytics` API.
 
-``` shell
+```shell
 yolo export model=yolov8s.pt format=onnx opset=11 simplify=True
 ```
 
@@ -27,7 +27,7 @@ You can export TensorRT engine by [`trtexec`](https://github.com/NVIDIA/TensorRT
 
 Usage:
 
-``` shell
+```shell
 /usr/src/tensorrt/bin/trtexec \
 --onnx=yolov8s.onnx \
 --saveEngine=yolov8s.engine \
@@ -77,7 +77,7 @@ float iou_thres = 0.65f;
 
 And build:
 
-``` shell
+```shell
 export root=${PWD}
 cd src/detect/normal
 mkdir build && cd build
@@ -89,7 +89,7 @@ cd ${root}
 
 Usage:
 
-``` shell
+```shell
 # infer image
 ./yolov8 yolov8s.engine data/bus.jpg
 # infer images

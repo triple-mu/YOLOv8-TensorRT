@@ -15,27 +15,13 @@ except ImportError:
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-w',
-                        '--weights',
-                        type=str,
-                        required=True,
-                        help='PyTorch yolov8 weights')
-    parser.add_argument('--opset',
-                        type=int,
-                        default=11,
-                        help='ONNX opset version')
-    parser.add_argument('--sim',
-                        action='store_true',
-                        help='simplify onnx model')
-    parser.add_argument('--input-shape',
-                        nargs='+',
-                        type=int,
-                        default=[1, 3, 640, 640],
-                        help='Model input shape only for api builder')
-    parser.add_argument('--device',
-                        type=str,
-                        default='cpu',
-                        help='Export ONNX device')
+    parser.add_argument("-w", "--weights", type=str, required=True, help="PyTorch yolov8 weights")
+    parser.add_argument("--opset", type=int, default=11, help="ONNX opset version")
+    parser.add_argument("--sim", action="store_true", help="simplify onnx model")
+    parser.add_argument(
+        "--input-shape", nargs="+", type=int, default=[1, 3, 640, 640], help="Model input shape only for api builder"
+    )
+    parser.add_argument("--device", type=str, default="cpu", help="Export ONNX device")
     args = parser.parse_args()
     assert len(args.input_shape) == 4
     return args
@@ -51,26 +37,29 @@ def main(args):
     fake_input = torch.randn(args.input_shape).to(args.device)
     for _ in range(2):
         model(fake_input)
-    save_path = args.weights.replace('.pt', '.onnx')
+    save_path = args.weights.replace(".pt", ".onnx")
     with BytesIO() as f:
-        torch.onnx.export(model,
-                          fake_input,
-                          f,
-                          opset_version=args.opset,
-                          input_names=['images'],
-                          output_names=['outputs', 'proto'])
+        torch.onnx.export(
+            model,
+            fake_input,
+            f,
+            opset_version=args.opset,
+            input_names=["images"],
+            output_names=["outputs", "proto"],
+            dynamo=False,
+        )
         f.seek(0)
         onnx_model = onnx.load(f)
     onnx.checker.check_model(onnx_model)
     if args.sim:
         try:
             onnx_model, check = onnxsim.simplify(onnx_model)
-            assert check, 'assert check failed'
+            assert check, "assert check failed"
         except Exception as e:
-            print(f'Simplifier failure: {e}')
+            print(f"Simplifier failure: {e}")
     onnx.save(onnx_model, save_path)
-    print(f'ONNX export success, saved as {save_path}')
+    print(f"ONNX export success, saved as {save_path}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main(parse_args())

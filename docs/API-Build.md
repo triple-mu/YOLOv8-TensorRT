@@ -2,7 +2,7 @@
 
 When you want to build engine by API. You should generate the pickle weights parameters first.
 
-``` shell
+```shell
 python3 gen_pkl.py -w yolov8s.pt -o yolov8s.pkl
 ```
 

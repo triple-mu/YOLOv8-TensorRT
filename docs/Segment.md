@@ -9,7 +9,7 @@ YOLOv8 PyTorch model -> ONNX -> TensorRT Engine
 
 You can export your onnx model by `ultralytics` API and the onnx is also modify by this repo.
 
-``` shell
+```shell
 python3 export-seg.py \
 --weights yolov8s-seg.pt \
 --opset 11 \
@@ -36,7 +36,7 @@ You can export TensorRT engine from ONNX by [`build.py` ](../build.py).
 
 Usage:
 
-``` shell
+```shell
 python3 build.py \
 --weights yolov8s-seg.onnx \
 --fp16  \
@@ -57,7 +57,7 @@ You can export TensorRT engine by [`trtexec`](https://github.com/NVIDIA/TensorRT
 
 Usage:
 
-``` shell
+```shell
 /usr/src/tensorrt/bin/trtexec \
 --onnx=yolov8s-seg.onnx \
 --saveEngine=yolov8s-seg.engine \
@@ -72,7 +72,7 @@ You can infer images with the engine by [`infer-seg.py`](../infer-seg.py) .
 
 Usage:
 
-``` shell
+```shell
 python3 infer-seg.py \
 --engine yolov8s-seg.engine \
 --imgs data \
@@ -108,7 +108,7 @@ float score_thres = 0.25f;
 float iou_thres = 0.65f;
 ```
 
-``` shell
+```shell
 export root=${PWD}
 cd src/segment/simple
 mkdir build
@@ -128,7 +128,7 @@ It is a gread api about efficient in-class nms . It will be used by default!
 
 Usage:
 
-``` shell
+```shell
 # infer image
 ./yolov8-seg yolov8s-seg.engine data/bus.jpg
 # infer images
@@ -145,7 +145,7 @@ You can leave this repo and use the original `ultralytics` repo for onnx export.
 
 You can export your onnx model by `ultralytics` API.
 
-``` shell
+```shell
 yolo export model=yolov8s-seg.pt format=onnx opset=11 simplify=True
 ```
 
@@ -166,7 +166,7 @@ You can export TensorRT engine by [`trtexec`](https://github.com/NVIDIA/TensorRT
 
 Usage:
 
-``` shell
+```shell
 /usr/src/tensorrt/bin/trtexec \
 --onnx=yolov8s-seg.onnx \
 --saveEngine=yolov8s-seg.engine \
@@ -217,7 +217,7 @@ float iou_thres = 0.65f;
 
 And build:
 
-``` shell
+```shell
 export root=${PWD}
 cd src/segment/normal
 mkdir build
@@ -229,7 +229,7 @@ cd ${root}
 
 Usage:
 
-``` shell
+```shell
 # infer image
 ./yolov8-seg yolov8s-seg.engine data/bus.jpg
 # infer images
@@ -245,7 +245,7 @@ you can get more information in [`infer-seg-without-torch.py`](../infer-seg-with
 
 Usage:
 
-``` shell
+```shell
 python3 infer-seg-without-torch.py \
 --engine yolov8s-seg.engine \
 --imgs data \
