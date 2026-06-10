@@ -91,6 +91,15 @@ endif()
 # them natively on the device (or cross-compile) with -DTensorRT_ROOT pointing at
 # the aarch64 TensorRT. No separate Jetson sources are needed.
 
+# Custom TensorRT postprocess plugins (libyolov8_plugins.so) — opt-in, needs CUDA.
+option(BUILD_PLUGINS "Build the custom TensorRT postprocess plugins" OFF)
+if(BUILD_PLUGINS)
+    if(NOT YOLOV8_GPU_PREPROCESS)
+        message(FATAL_ERROR "BUILD_PLUGINS requires a CUDA compiler (none found at configure time)")
+    endif()
+    add_subdirectory(csrc/plugins)
+endif()
+
 # DeepStream parser plugin — needs the DeepStream SDK, so it is off by default.
 option(BUILD_DEEPSTREAM "Build the DeepStream parser plugin" OFF)
 if(BUILD_DEEPSTREAM)

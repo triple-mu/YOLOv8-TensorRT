@@ -25,12 +25,16 @@ def parse_args() -> argparse.Namespace:
         "--input-shape", nargs="+", type=int, default=[1, 3, 640, 640], help="Model input shape only for api builder"
     )
     parser.add_argument("--device", type=str, default="cpu", help="Export ONNX device")
+    parser.add_argument(
+        "--plugin", action="store_true", help="Emit the custom YoloDetPostprocess plugin instead of EfficientNMS_TRT"
+    )
     args = parser.parse_args()
     if len(args.input_shape) != 4:
         raise ValueError(f"--input-shape needs 4 values, got {len(args.input_shape)}")
     PostDetect.conf_thres = args.conf_thres
     PostDetect.iou_thres = args.iou_thres
     PostDetect.topk = args.topk
+    PostDetect.plugin = args.plugin
     return args
 
 
