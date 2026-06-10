@@ -155,6 +155,8 @@ cmake -S . -B build -DBUILD_TESTS=ON && ctest --test-dir build   # C++ 单元测
 - **TensorRT 11 的 `trtexec` 报 "model not found"** —— `--onnx=` 用**绝对路径**。
 - **无显示环境下 `--show` 无效** —— 去掉 `--show`，用 `--out-dir` 保存标注图。
 
+更多问题（batch、INT8、导出参数、自定义模型等）见 [docs/FAQ.md](docs/FAQ.md)。
+
 ## 部署
 
 - **DeepStream** —— bbox 解析插件见 [csrc/deepstream](csrc/deepstream/README.md)；用 `-DBUILD_DEEPSTREAM=ON` 构建（需 DeepStream SDK）。

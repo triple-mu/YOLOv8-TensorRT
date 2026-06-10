@@ -158,6 +158,8 @@ cmake -S . -B build -DBUILD_TESTS=ON && ctest --test-dir build   # C++ unit test
 - **TensorRT 11 `trtexec` says "model not found"** — pass an **absolute** `--onnx=` path.
 - **`--show` does nothing on a headless box** — drop `--show` and use `--out-dir` to save annotated images.
 
+More questions (batch, INT8, export tweaks, custom models, …) are answered in [docs/FAQ.md](docs/FAQ.md).
+
 ## Deployment
 
 - **DeepStream** — bbox parser plugin in [csrc/deepstream](csrc/deepstream/README.md); build with `-DBUILD_DEEPSTREAM=ON` (needs the DeepStream SDK).
