@@ -4,6 +4,7 @@
 # the CUDA language (enabled by the root build when nvcc is found).
 add_library(yolov8_plugins SHARED
     src/det_plugin.cu
+    src/seg_plugin.cu
 )
 
 set_target_properties(yolov8_plugins PROPERTIES

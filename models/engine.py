@@ -111,16 +111,20 @@ class EngineBuilder:
     def build_from_onnx(self, iou_thres: float = 0.65, conf_thres: float = 0.25, topk: int = 100) -> None:
         parser = trt.OnnxParser(self.network, self.logger)
         onnx_model = onnx.load(str(self.checkpoint))
-        if not self.seg:
-            # Override the NMS node's thresholds by attribute name (works for both
-            # EfficientNMS_TRT and our YoloDetPostprocess plugin, regardless of order).
-            for attr in onnx_model.graph.node[-1].attribute:
-                if attr.name == "max_output_boxes":
-                    attr.i = topk
-                elif attr.name == "score_threshold":
-                    attr.f = conf_thres
-                elif attr.name == "iou_threshold":
-                    attr.f = iou_thres
+        # Override the NMS node's thresholds by attribute name. Works for EfficientNMS_TRT
+        # and the Yolo*Postprocess plugins wherever the node sits in the graph; a no-op for
+        # raw engines that have no such node.
+        for node in onnx_model.graph.node:
+            names = {a.name for a in node.attribute}
+            if "iou_threshold" in names and "score_threshold" in names:
+                for attr in node.attribute:
+                    if attr.name == "max_output_boxes":
+                        attr.i = topk
+                    elif attr.name == "score_threshold":
+                        attr.f = conf_thres
+                    elif attr.name == "iou_threshold":
+                        attr.f = iou_thres
+                break
 
         if not parser.parse(onnx_model.SerializeToString()):
             raise RuntimeError(f"Failed to load ONNX file: {str(self.checkpoint)}")
