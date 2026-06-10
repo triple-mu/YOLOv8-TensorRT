@@ -4,7 +4,9 @@
 #include "yolov8/logger.hpp"
 #include "yolov8/preprocess.hpp"
 #include "yolov8/trt_compat.hpp"
+#include <cstdlib>
 #include <cstring>
+#include <dlfcn.h>
 #include <fstream>
 #include <iostream>
 #include <vector>
@@ -26,6 +28,16 @@ void Engine::load_engine(const std::string& engine_path)
     std::vector<char> blob(static_cast<size_t>(size));
     TRT_CHECK(file.read(blob.data(), size).good());
     file.close();
+
+    // Load a custom plugin .so (if any) before plugin init / deserialize so its
+    // creators are registered. Path from --plugin-lib or $YOLOV8_PLUGIN_LIB.
+    const char* plugin_lib =
+        !config_.plugin_lib.empty() ? config_.plugin_lib.c_str() : std::getenv("YOLOV8_PLUGIN_LIB");
+    if (plugin_lib && *plugin_lib) {
+        if (!dlopen(plugin_lib, RTLD_NOW | RTLD_GLOBAL)) {
+            throw TrtException(std::string("failed to load plugin library '") + plugin_lib + "': " + dlerror());
+        }
+    }
 
     initLibNvInferPlugins(&global_logger(), "");
     runtime_.reset(nvinfer1::createInferRuntime(global_logger()));

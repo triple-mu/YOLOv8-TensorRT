@@ -24,6 +24,7 @@ target_link_libraries(yolov8_core PUBLIC
     CUDA::cudart
     ${OpenCV_LIBS}
     TensorRT::TensorRT
+    ${CMAKE_DL_LIBS}  # dlopen for custom plugin .so
 )
 
 # GPU preprocessing kernel (opt-in). Compiled into the core lib only when the root

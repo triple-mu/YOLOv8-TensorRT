@@ -89,6 +89,34 @@ unaffected. Set GPU architectures with `-DCMAKE_CUDA_ARCHITECTURES=86` (default
 `75;86;89;90`). The kernel's bilinear resize is not bit-identical to `cv::resize`, so
 detections match the CPU path within tolerance, not byte-for-byte.
 
+## Custom postprocess plugins (opt-in)
+
+The detection postprocess (decode + NMS) can run inside the engine as a custom
+TensorRT plugin (`YoloDetPostprocess`, an alternative to the built-in
+`EfficientNMS_TRT`). Build the plugin library — like the engine, it is tied to the
+TensorRT version it is built against, so use the same `-DTensorRT_ROOT`:
+
+```shell
+cmake -S . -B build -DTensorRT_ROOT=/data/TensorRT-10.16.1.11 -DBUILD_PLUGINS=ON
+cmake --build build -j           # -> build/bin/libyolov8_plugins.so
+```
+
+Export an ONNX that emits the plugin node, build an engine with the `.so` loaded,
+then run — the C++ binary auto-detects the plugin/End2End outputs:
+
+```shell
+python export-det.py --weights yolov8s.pt --plugin --input-shape 1 3 640 640
+# build with the plugin registered (trtexec --staticPlugins, or build.py with the env var):
+trtexec --onnx=$PWD/yolov8s.onnx --saveEngine=$PWD/yolov8s.engine --fp16 \
+    --staticPlugins=$PWD/build/bin/libyolov8_plugins.so
+export YOLOV8_PLUGIN_LIB=$PWD/build/bin/libyolov8_plugins.so   # so build.py / infer.py / the C++ runtime can load it
+./build/bin/yolov8_detect yolov8s.engine data/bus.jpg          # or pass --plugin-lib <path>
+```
+
+The C++ runtime loads the `.so` from `--plugin-lib` or `$YOLOV8_PLUGIN_LIB` before
+deserializing. The plugin uses cub (not thrust) for its NMS sort, so it is safe under
+CUDA-graph capture. `EfficientNMS_TRT` remains the default; the plugin is opt-in.
+
 ## Tests
 
 ```shell

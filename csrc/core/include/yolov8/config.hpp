@@ -15,6 +15,7 @@ struct InferConfig {
     int         seg_h        = 160;
     int         seg_w        = 160;
     std::string labels_path;  // empty -> built-in COCO names
+    std::string plugin_lib;   // custom plugin .so to dlopen (else $YOLOV8_PLUGIN_LIB)
     bool        warmup         = true;
     bool        show           = false;  // off by default (works headless); otherwise save
     bool        profile        = false;  // attach a per-layer IProfiler and print a report

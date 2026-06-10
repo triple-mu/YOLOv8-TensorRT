@@ -17,6 +17,7 @@ import tensorrt as trt
 from numpy import ndarray
 
 from models import compat
+from models.plugins import load_plugin_lib
 
 os.environ["CUDA_MODULE_LOADING"] = "LAZY"
 warnings.filterwarnings(action="ignore", category=DeprecationWarning)
@@ -43,6 +44,7 @@ class Backend(ABC):
 
     def __init_engine(self) -> None:
         logger = trt.Logger(trt.Logger.WARNING)
+        load_plugin_lib()  # register custom plugins before deserialize (no-op unless YOLOV8_PLUGIN_LIB set)
         trt.init_libnvinfer_plugins(logger, namespace="")
         with trt.Runtime(logger) as runtime:
             model = runtime.deserialize_cuda_engine(self.weight.read_bytes())

@@ -21,6 +21,7 @@ namespace {
               << "  --iou <f>         NMS IoU threshold (default " << d.iou_thres << ")\n"
               << "  --topk <n>        max detections (default " << d.topk << ")\n"
               << "  --labels <path>   class-names file, one per line (default: built-in COCO)\n"
+              << "  --plugin-lib <p>  custom TensorRT plugin .so to load (else $YOLOV8_PLUGIN_LIB)\n"
               << "  --seg-channels <n> mask prototype channels (default " << d.seg_channels << ")\n"
               << "  --seg-hw <h> <w>  mask prototype size (default " << d.seg_h << " " << d.seg_w << ")\n"
               << "  --out-dir <dir>   output directory (default \"" << d.out_dir << "\")\n"
@@ -84,6 +85,9 @@ CliArgs parse_args(int argc, char** argv, const InferConfig& defaults)
         }
         else if (a == "--labels") {
             args.config.labels_path = next("--labels");
+        }
+        else if (a == "--plugin-lib") {
+            args.config.plugin_lib = next("--plugin-lib");
         }
         else if (a == "--seg-channels") {
             args.config.seg_channels = to_int(next("--seg-channels"), "--seg-channels");
