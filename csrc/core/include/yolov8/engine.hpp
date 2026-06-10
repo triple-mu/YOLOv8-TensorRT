@@ -58,8 +58,9 @@ private:
     // Declared so destruction runs context -> engine -> runtime -> stream -> buffers.
     std::vector<DeviceBuffer>                 device_buffers_;
     std::vector<HostPinnedBuffer>             host_buffers_;
-    std::vector<void*>                        device_ptrs_;  // [inputs..., outputs...]
-    DeviceBuffer                              raw_input_;    // uint8 upload buffer for --gpu-preprocess
+    std::vector<void*>                        device_ptrs_;     // [inputs..., outputs...]
+    DeviceBuffer                              raw_input_;       // uint8 device buffer for --gpu-preprocess
+    HostPinnedBuffer                          raw_input_host_;  // pinned staging for a fast async H2D upload
     CudaStream                                stream_;
     TrtUniquePtr<nvinfer1::IRuntime>          runtime_;
     TrtUniquePtr<nvinfer1::ICudaEngine>       engine_;

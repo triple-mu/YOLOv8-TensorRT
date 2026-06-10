@@ -5,6 +5,7 @@
 #include "yolov8/preprocess.hpp"
 #include "yolov8/trt_compat.hpp"
 #include <cstdlib>
+#include <cstring>
 #include <dlfcn.h>
 #include <fstream>
 #include <iostream>
@@ -134,13 +135,19 @@ void Engine::copy_from_mat(const cv::Mat& image)
     if (config_.gpu_preprocess) {
 #ifdef YOLOV8_GPU_PREPROCESS
         // Upload the raw uint8 BGR image and let a CUDA kernel produce the NCHW float
-        // blob directly in the input buffer — no CPU letterbox/blob.
+        // blob directly in the input buffer — no CPU letterbox/blob. Stage through a
+        // pinned host buffer so the H2D copy is truly async (pageable memory is not).
         cv::Mat      src   = image.isContinuous() ? image : image.clone();
         const size_t bytes = src.total() * src.elemSize();
-        if (raw_input_.bytes() < bytes) {
-            raw_input_ = DeviceBuffer(bytes);  // grow (move-assign frees the old buffer)
+        if (raw_input_host_.bytes() < bytes) {
+            raw_input_host_ = HostPinnedBuffer(bytes);  // grow (move-assign frees the old buffer)
         }
-        CUDA_CHECK(cudaMemcpyAsync(raw_input_.data(), src.data, bytes, cudaMemcpyHostToDevice, stream_.get()));
+        if (raw_input_.bytes() < bytes) {
+            raw_input_ = DeviceBuffer(bytes);
+        }
+        std::memcpy(raw_input_host_.data(), src.data, bytes);
+        CUDA_CHECK(
+            cudaMemcpyAsync(raw_input_.data(), raw_input_host_.data(), bytes, cudaMemcpyHostToDevice, stream_.get()));
         auto*       dst = static_cast<float*>(device_ptrs_[0]);
         const int   dw = config_.input_size.width, dh = config_.input_size.height;
         const auto* raw = static_cast<const unsigned char*>(raw_input_.data());
