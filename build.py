@@ -3,7 +3,7 @@ import argparse
 from models import EngineBuilder
 
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--weights", type=str, required=True, help="Weights file")
     parser.add_argument("--iou-thres", type=float, default=0.65, help="IOU threshoud for NMS plugin")
@@ -16,11 +16,12 @@ def parse_args():
     parser.add_argument("--device", type=str, default="cuda:0", help="TensorRT builder device")
     parser.add_argument("--seg", action="store_true", help="Build seg model by onnx")
     args = parser.parse_args()
-    assert len(args.input_shape) == 4
+    if len(args.input_shape) != 4:
+        raise ValueError(f"--input-shape needs 4 values, got {len(args.input_shape)}")
     return args
 
 
-def main(args):
+def main(args: argparse.Namespace) -> None:
     builder = EngineBuilder(args.weights, args.device)
     builder.seg = args.seg
     builder.build(

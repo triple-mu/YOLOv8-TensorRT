@@ -62,7 +62,7 @@ C++ 目标：`yolov8_detect / _detect_e2e / _seg / _seg_simple / _pose / _obb / 
 
 - `engine.py` — `TRTModule`(torch 后端，已版本自适应) + `EngineBuilder`(ONNX→engine)。
 - `compat.py` — TRT 8/10 版本助手（`io_names`/`np_dtype`/`engine_shape`）。
-- `backend.py` — `Backend` 基类 + `CudartBackend`/`PycudaBackend`（统一三后端的非 torch 路径，**新增了 cudart/pycuda 原先缺失的 TRT10 支持**）；`cudart_api.py`/`pycuda_api.py` 是其薄别名。
+- `backend.py` — `Backend` 基类 + `CudartBackend`/`PycudaBackend`（统一三后端的非 torch 路径，**新增了 cudart/pycuda 原先缺失的 TRT10 支持**）；`cudart_api.py`/`pycuda_api.py` 是其别名。
 - `labels.py` — 从 `data/labels/*.txt` 读类别 + 颜色/骨架；`config.py` 重导出它（向后兼容）。
 - `tasks/{det,seg,pose,obb,cls}.py` — 各任务 `process()`，复用 `utils.py`(numpy) 与 `torch_utils.py`(torch) 的纯函数。
 - `infer.py`(根) 统一入口；`utils.py` 纯函数(letterbox/blob/NMS/postprocess) 是单测对象。

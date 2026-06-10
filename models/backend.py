@@ -77,7 +77,7 @@ class Backend(ABC):
         for _ in range(10):
             self.__call__(*[t.cpu for t in self.inp_info])
 
-    def set_profiler(self, profiler) -> None:
+    def set_profiler(self, profiler: "trt.IProfiler | None") -> None:
         self.context.profiler = profiler if profiler is not None else trt.Profiler()
 
     def __call__(self, *inputs) -> tuple | ndarray:
@@ -112,7 +112,7 @@ class Backend(ABC):
             self._memcpy_d2h(outputs[i], gpu)
         return tuple(outputs) if len(outputs) > 1 else outputs[0]
 
-    def _bind(self, name: str, index: int, gpu, bindings: list) -> None:
+    def _bind(self, name: str, index: int, gpu: object, bindings: list) -> None:
         if compat.is_trt10:
             self.context.set_tensor_address(name, self._addr(gpu))
         else:

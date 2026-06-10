@@ -13,7 +13,7 @@ except ImportError:
     onnxsim = None
 
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("-w", "--weights", type=str, required=True, help="PyTorch yolov8 weights")
     parser.add_argument("--iou-thres", type=float, default=0.65, help="IOU threshoud for NMS plugin")
@@ -26,14 +26,15 @@ def parse_args():
     )
     parser.add_argument("--device", type=str, default="cpu", help="Export ONNX device")
     args = parser.parse_args()
-    assert len(args.input_shape) == 4
+    if len(args.input_shape) != 4:
+        raise ValueError(f"--input-shape needs 4 values, got {len(args.input_shape)}")
     PostDetect.conf_thres = args.conf_thres
     PostDetect.iou_thres = args.iou_thres
     PostDetect.topk = args.topk
     return args
 
 
-def main(args):
+def main(args: argparse.Namespace) -> None:
     b = args.input_shape[0]
     YOLOv8 = YOLO(args.weights)
     model = YOLOv8.model.fuse().eval()
@@ -65,7 +66,8 @@ def main(args):
     if args.sim:
         try:
             onnx_model, check = onnxsim.simplify(onnx_model)
-            assert check, "assert check failed"
+            if not check:
+                raise RuntimeError("onnxsim simplification check failed")
         except Exception as e:
             print(f"Simplifier failure: {e}")
     onnx.save(onnx_model, save_path)
