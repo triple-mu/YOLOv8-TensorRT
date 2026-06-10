@@ -168,33 +168,30 @@ def seg_postprocess(
 
 def pose_postprocess(
     data: tuple | ndarray, conf_thres: float = 0.25, iou_thres: float = 0.65
-) -> tuple[ndarray, ndarray, ndarray]:
+) -> tuple[ndarray, ndarray, ndarray, ndarray]:
     if isinstance(data, tuple):
         assert len(data) == 1
         data = data[0]
     outputs = np.transpose(data[0], (1, 0))
-    bboxes, scores, kpts = np.split(outputs, [4, 5], 1)
-    scores, kpts = scores.squeeze(), kpts.squeeze()
+    num_cls = outputs.shape[-1] - 4 - 51  # 51 = 17 keypoints x 3; usually 1 (person)
+    bboxes, cls, kpts = np.split(outputs, [4, 4 + num_cls], 1)
+    scores = cls.max(-1)
+    labels = cls.argmax(-1)
     idx = scores > conf_thres
-    if not idx.any():  # no bounding boxes or seg were created
+    if not idx.any():  # no bounding boxes were created
         return (
             np.empty((0, 4), dtype=np.float32),
             np.empty((0,), dtype=np.float32),
             np.empty((0, 0, 0), dtype=np.float32),
+            np.empty((0,), dtype=np.int32),
         )
-    bboxes, scores, kpts = bboxes[idx], scores[idx], kpts[idx]
-    xycenter, wh = np.split(
-        bboxes,
-        [
-            2,
-        ],
-        -1,
-    )
+    bboxes, scores, kpts, labels = bboxes[idx], scores[idx], kpts[idx], labels[idx]
+    xycenter, wh = np.split(bboxes, [2], -1)
     cvbboxes = np.concatenate([xycenter - 0.5 * wh, wh], -1)
-    idx = cv2.dnn.NMSBoxes(cvbboxes, scores, conf_thres, iou_thres)
-    cvbboxes, scores, kpts = cvbboxes[idx], scores[idx], kpts[idx]
+    nms = cv2.dnn.NMSBoxes(cvbboxes, scores, conf_thres, iou_thres)
+    cvbboxes, scores, kpts, labels = cvbboxes[nms], scores[nms], kpts[nms], labels[nms]
     cvbboxes[:, 2:] += cvbboxes[:, :2]
-    return cvbboxes, scores, kpts.reshape(idx.shape[0], -1, 3)
+    return cvbboxes, scores, kpts.reshape(nms.shape[0], -1, 3), labels
 
 
 def obb_postprocess(

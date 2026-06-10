@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from models.utils import NMSBoxes, blob, box_iou, det_postprocess, letterbox, sigmoid
+from models.utils import NMSBoxes, blob, box_iou, det_postprocess, letterbox, pose_postprocess, sigmoid
 
 
 def test_letterbox_shape_and_padding():
@@ -76,4 +76,30 @@ def test_det_postprocess_empty():
     num_dets = np.array([[0]], dtype=np.int32)
     z = np.zeros((1, 1, 4), dtype=np.float32)
     b, s, le = det_postprocess((num_dets, z, z[..., 0], z[..., 0].astype(np.int32)))
+    assert b.shape == (0, 4) and s.shape == (0,) and le.shape == (0,)
+
+
+def _pose_raw(cls_scores: list[float]) -> np.ndarray:
+    """One-anchor raw pose output [1, 4+nc+51, 1] with a valid box and given class scores."""
+    num_cls = len(cls_scores)
+    raw = np.zeros((1, 4 + num_cls + 51, 1), dtype=np.float32)
+    raw[0, :4, 0] = (320, 320, 100, 200)  # cx, cy, w, h
+    raw[0, 4 : 4 + num_cls, 0] = cls_scores
+    return raw
+
+
+def test_pose_postprocess_single_class():
+    b, s, k, le = pose_postprocess(_pose_raw([0.9]))
+    assert b.shape == (1, 4) and s.shape == (1,) and k.shape == (1, 17, 3)
+    assert abs(float(s[0]) - 0.9) < 1e-6 and le.tolist() == [0]
+
+
+def test_pose_postprocess_multi_class_argmax():
+    b, s, k, le = pose_postprocess(_pose_raw([0.3, 0.8, 0.5]))  # nc=3, argmax=1
+    assert le.tolist() == [1] and abs(float(s[0]) - 0.8) < 1e-6
+    assert k.shape == (1, 17, 3)
+
+
+def test_pose_postprocess_empty():
+    b, s, k, le = pose_postprocess(_pose_raw([0.1]))  # below conf_thres
     assert b.shape == (0, 4) and s.shape == (0,) and le.shape == (0,)
