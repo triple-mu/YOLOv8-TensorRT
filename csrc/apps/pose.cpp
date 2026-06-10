@@ -10,7 +10,8 @@
 
 using namespace yolov8;
 
-// YOLOv8 pose: single class with 17 keypoints. Output [1, 4+1+51, anchors].
+// YOLOv8 pose: 17 keypoints with one or more classes. Output [1, 4+nc+51, anchors];
+// nc is usually 1 (person), so the score is the single class channel.
 class PoseEngine: public Engine {
 public:
     using Engine::Engine;
@@ -18,7 +19,9 @@ public:
     void postprocess(std::vector<Object>& objs) override
     {
         objs.clear();
-        const int   num_anchors = output_bindings_[0].dims.d[2];
+        const int   num_anchors  = output_bindings_[0].dims.d[2];
+        const int   num_channels = output_bindings_[0].dims.d[1];
+        const int   num_cls      = num_channels - 4 - 51;  // 51 = 17 keypoints x 3
         const float dw = pparam_.dw, dh = pparam_.dh;
         const float width = pparam_.width, height = pparam_.height, ratio = pparam_.ratio;
 
@@ -28,14 +31,21 @@ public:
         std::vector<int>                indices;
         std::vector<std::vector<float>> kpss;
 
-        cv::Mat output(output_bindings_[0].dims.d[1], num_anchors, CV_32F, host_ptrs_[0]);
+        cv::Mat output(num_channels, num_anchors, CV_32F, host_ptrs_[0]);
         output = output.t();
         for (int i = 0; i < num_anchors; ++i) {
-            auto        row_ptr   = output.row(i).ptr<float>();
-            auto        bbox_ptr  = row_ptr;
-            auto        score_ptr = row_ptr + 4;
-            auto        kps_ptr   = row_ptr + 5;
-            const float score     = *score_ptr;
+            auto  row_ptr   = output.row(i).ptr<float>();
+            auto  bbox_ptr  = row_ptr;
+            auto  score_ptr = row_ptr + 4;
+            auto  kps_ptr   = row_ptr + 4 + num_cls;
+            int   label     = 0;
+            float score     = score_ptr[0];
+            for (int c = 1; c < num_cls; ++c) {
+                if (score_ptr[c] > score) {
+                    score = score_ptr[c];
+                    label = c;
+                }
+            }
             if (score > config_.score_thres) {
                 const float x  = *bbox_ptr++ - dw;
                 const float y  = *bbox_ptr++ - dh;
@@ -56,7 +66,7 @@ public:
                 }
 
                 bboxes.emplace_back(cv::Rect_<float>(x0, y0, x1 - x0, y1 - y0));
-                labels.push_back(0);
+                labels.push_back(label);
                 scores.push_back(score);
                 kpss.push_back(std::move(kps));
             }
@@ -94,7 +104,12 @@ public:
         for (const auto& obj : objs) {
             cv::rectangle(res, obj.rect, {0, 0, 255}, 2);
             char text[256];
-            std::snprintf(text, sizeof(text), "person %.1f%%", obj.prob * 100);
+            if (obj.label == 0) {
+                std::snprintf(text, sizeof(text), "person %.1f%%", obj.prob * 100);
+            }
+            else {
+                std::snprintf(text, sizeof(text), "%d %.1f%%", obj.label, obj.prob * 100);
+            }
             int       base_line  = 0;
             cv::Size  label_size = cv::getTextSize(text, cv::FONT_HERSHEY_SIMPLEX, 0.4, 1, &base_line);
             const int x          = static_cast<int>(obj.rect.x);

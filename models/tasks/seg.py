@@ -5,13 +5,20 @@ from config import ALPHA, CLASSES_SEG, COLORS, MASK_COLORS
 from models.utils import blob, letterbox
 
 
-def process(engine, bgr, draw, ctx) -> bool:
+def preprocess(bgr, ctx):
     img, ratio, dwdh = letterbox(bgr, (ctx.width, ctx.height))
     dw, dh = int(dwdh[0]), int(dwdh[1])
     h, w = ctx.height, ctx.width
     rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     tensor, seg_img = blob(rgb, return_seg=True)
     seg_img = seg_img[dh : h - dh, dw : w - dw, [2, 1, 0]]
+    return tensor, (ratio, dwdh, seg_img, img.shape[:2])
+
+
+def postprocess(data, meta, draw, ctx) -> bool:
+    ratio, dwdh, seg_img, img_shape = meta
+    dw, dh = int(dwdh[0]), int(dwdh[1])
+    h, w = ctx.height, ctx.width
 
     if ctx.torch:
         import torch
@@ -19,9 +26,8 @@ def process(engine, bgr, draw, ctx) -> bool:
         from models.torch_utils import seg_postprocess
 
         dwdh_arr = torch.asarray(dwdh * 2, dtype=torch.float32, device=ctx.device)
-        data = engine(torch.asarray(tensor, device=ctx.device))
         seg_img = torch.asarray(seg_img, device=ctx.device)
-        bboxes, scores, labels, masks = seg_postprocess(data, img.shape[:2], ctx.conf_thres, ctx.iou_thres)
+        bboxes, scores, labels, masks = seg_postprocess(data, img_shape, ctx.conf_thres, ctx.iou_thres)
         if bboxes.numel() == 0:
             return False
         masks = masks[:, dh : h - dh, dw : w - dw, :]
@@ -36,8 +42,7 @@ def process(engine, bgr, draw, ctx) -> bool:
         from models.utils import seg_postprocess
 
         dwdh_arr = np.array(dwdh * 2, dtype=np.float32)
-        data = engine(np.ascontiguousarray(tensor))
-        bboxes, scores, labels, masks = seg_postprocess(data, img.shape[:2], ctx.conf_thres, ctx.iou_thres)
+        bboxes, scores, labels, masks = seg_postprocess(data, img_shape, ctx.conf_thres, ctx.iou_thres)
         if bboxes.size == 0:
             return False
         masks = masks[:, dh : h - dh, dw : w - dw, :]

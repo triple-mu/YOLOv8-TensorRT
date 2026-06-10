@@ -5,25 +5,27 @@ from config import CLASSES_DET, COLORS
 from models.utils import blob, letterbox
 
 
-def process(engine, bgr, draw, ctx) -> bool:
+def preprocess(bgr, ctx):
     img, ratio, dwdh = letterbox(bgr, (ctx.width, ctx.height))
     rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     tensor = blob(rgb, return_seg=False)
+    return tensor, (ratio, dwdh)
 
+
+def postprocess(data, meta, draw, ctx) -> bool:
+    ratio, dwdh = meta
     if ctx.torch:
         import torch
 
         from models.torch_utils import det_postprocess
 
         dwdh_arr = torch.asarray(dwdh * 2, dtype=torch.float32, device=ctx.device)
-        data = engine(torch.asarray(tensor, device=ctx.device))
         bboxes, scores, labels = det_postprocess(data)
         empty = bboxes.numel() == 0
     else:
         from models.utils import det_postprocess
 
         dwdh_arr = np.array(dwdh * 2, dtype=np.float32)
-        data = engine(np.ascontiguousarray(tensor))
         bboxes, scores, labels = det_postprocess(data)
         empty = bboxes.size == 0
 

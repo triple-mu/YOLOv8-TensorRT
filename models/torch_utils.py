@@ -29,22 +29,28 @@ def seg_postprocess(
 
 def pose_postprocess(
     data: tuple | Tensor, conf_thres: float = 0.25, iou_thres: float = 0.65
-) -> tuple[Tensor, Tensor, Tensor]:
+) -> tuple[Tensor, Tensor, Tensor, Tensor]:
     if isinstance(data, tuple):
         assert len(data) == 1
         data = data[0]
     outputs = torch.transpose(data[0], 0, 1).contiguous()
-    bboxes, scores, kpts = outputs.split([4, 1, 51], 1)
-    scores, kpts = scores.squeeze(), kpts.squeeze()
+    num_cls = outputs.shape[-1] - 4 - 51  # 51 = 17 keypoints x 3; usually 1 (person)
+    bboxes, cls, kpts = outputs.split([4, num_cls, 51], 1)
+    scores, labels = cls.max(-1)
     idx = scores > conf_thres
-    if not idx.any():  # no bounding boxes or seg were created
-        return bboxes.new_zeros((0, 4)), scores.new_zeros((0,)), bboxes.new_zeros((0, 0, 0))
-    bboxes, scores, kpts = bboxes[idx], scores[idx], kpts[idx]
+    if not idx.any():  # no bounding boxes were created
+        return (
+            bboxes.new_zeros((0, 4)),
+            scores.new_zeros((0,)),
+            bboxes.new_zeros((0, 0, 0)),
+            labels.new_zeros((0,)),
+        )
+    bboxes, scores, kpts, labels = bboxes[idx], scores[idx], kpts[idx], labels[idx]
     xycenter, wh = bboxes.chunk(2, -1)
     bboxes = torch.cat([xycenter - 0.5 * wh, xycenter + 0.5 * wh], -1)
-    idx = nms(bboxes, scores, iou_thres)
-    bboxes, scores, kpts = bboxes[idx], scores[idx], kpts[idx]
-    return bboxes, scores, kpts.reshape(idx.shape[0], -1, 3)
+    keep = nms(bboxes, scores, iou_thres)
+    bboxes, scores, kpts, labels = bboxes[keep], scores[keep], kpts[keep], labels[keep]
+    return bboxes, scores, kpts.reshape(keep.shape[0], -1, 3), labels
 
 
 def det_postprocess(data: tuple[Tensor, Tensor, Tensor, Tensor]):

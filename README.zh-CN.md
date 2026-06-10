@@ -105,6 +105,9 @@ python infer.py --task pose --backend pycuda --engine yolov8s-pose.engine --imgs
 | `--show` / `--out-dir` | 弹窗显示，或保存到目录 |
 | `--conf-thres` `--iou-thres` | 阈值（seg / pose / obb） |
 | `--device` | torch 设备，如 `cuda:0`（torch 后端） |
+| `--batch` | 每次引擎调用的图片数（dynamic-batch 引擎） |
+
+> **批量推理**：同一批图片合并为一次引擎调用，再逐图解码。固定 batch 的引擎（如导出时 `batch=2`）按自身 batch 运行；dynamic-batch 引擎按 `--batch N` 运行。单张图片或 batch=1 引擎行为不变。
 
 ### 4. 推理 —— C++
 
