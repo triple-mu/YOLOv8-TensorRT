@@ -57,11 +57,13 @@ def sigmoid(x: ndarray) -> ndarray:
 def path_to_list(images_path: str | Path) -> list:
     if isinstance(images_path, str):
         images_path = Path(images_path)
-    assert images_path.exists()
+    if not images_path.exists():
+        raise FileNotFoundError(f"path does not exist: {images_path}")
     if images_path.is_dir():
         images = [i.absolute() for i in images_path.iterdir() if i.suffix in SUFFIXS]
     else:
-        assert images_path.suffix in SUFFIXS
+        if images_path.suffix not in SUFFIXS:
+            raise ValueError(f"unsupported image suffix: {images_path.suffix}")
         images = [images_path.absolute()]
     return images
 
@@ -114,7 +116,8 @@ def NMSBoxes(boxes: ndarray, scores: ndarray, labels: ndarray, iou_thres: float,
 
 
 def det_postprocess(data: tuple[ndarray, ndarray, ndarray, ndarray]):
-    assert len(data) == 4
+    if len(data) != 4:
+        raise ValueError(f"det_postprocess expects 4 output tensors, got {len(data)}")
     num_dets, bboxes, scores, labels = (i[0] for i in data)
     nums = num_dets.item()
     if nums == 0:

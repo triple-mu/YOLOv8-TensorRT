@@ -7,6 +7,8 @@ import onnx
 import tensorrt as trt
 import torch
 
+from models import compat
+
 os.environ["CUDA_MODULE_LOADING"] = "LAZY"
 
 tensorrt_version = trt.__version__
@@ -21,7 +23,8 @@ class EngineBuilder:
 
     def __init__(self, checkpoint: str | Path, device: str | int | torch.device | None = None) -> None:
         checkpoint = Path(checkpoint) if isinstance(checkpoint, str) else checkpoint
-        assert checkpoint.exists() and checkpoint.suffix in (".onnx", ".pkl")
+        if not (checkpoint.exists() and checkpoint.suffix in (".onnx", ".pkl")):
+            raise ValueError(f"weights must be an existing .onnx or .pkl file: {checkpoint}")
         self.api = checkpoint.suffix == ".pkl"
         if isinstance(device, str):
             device = torch.device(device)
@@ -99,11 +102,11 @@ class EngineBuilder:
         iou_thres: float = 0.65,
         conf_thres: float = 0.25,
         topk: int = 100,
-        with_profiling=True,
+        with_profiling: bool = True,
     ) -> None:
         self.__build_engine(fp16, input_shape, iou_thres, conf_thres, topk, with_profiling)
 
-    def build_from_onnx(self, iou_thres: float = 0.65, conf_thres: float = 0.25, topk: int = 100):
+    def build_from_onnx(self, iou_thres: float = 0.65, conf_thres: float = 0.25, topk: int = 100) -> None:
         parser = trt.OnnxParser(self.network, self.logger)
         onnx_model = onnx.load(str(self.checkpoint))
         if not self.seg:
@@ -128,8 +131,9 @@ class EngineBuilder:
         iou_thres: float = 0.65,
         conf_thres: float = 0.25,
         topk: int = 100,
-    ):
-        assert not self.seg
+    ) -> None:
+        if self.seg:
+            raise ValueError("the TensorRT API builder does not support segmentation models")
         from .api import SPPF, C2f, Conv, Detect, get_depth, get_width
 
         with open(self.checkpoint, "rb") as f:
@@ -215,25 +219,13 @@ class TRTModule(torch.nn.Module):
 
         context = model.create_execution_context()
 
-        if major_version >= 10:
-            num_io_tensors = model.num_io_tensors
-            names = [model.get_tensor_name(i) for i in range(num_io_tensors)]
-            num_inputs = sum(1 for name in names if model.get_tensor_mode(name) == trt.TensorIOMode.INPUT)
-            num_outputs = num_io_tensors - num_inputs
-        else:
-            num_bindings = model.num_bindings
-            names = [model.get_binding_name(i) for i in range(num_bindings)]
-            num_inputs = sum(1 for i in range(num_bindings) if model.binding_is_input(i))
-            num_outputs = num_bindings - num_inputs
-
-        self.bindings: list[int] = [0] * (num_inputs + num_outputs)  # คงไว้เพื่อ TensorRT 8
-        self.num_bindings = num_inputs + num_outputs
-        self.num_inputs = num_inputs
-        self.num_outputs = num_outputs
+        self.input_names, self.output_names = compat.io_names(model)
+        self.num_inputs = len(self.input_names)
+        self.num_outputs = len(self.output_names)
+        self.num_bindings = self.num_inputs + self.num_outputs
+        self.bindings: list[int] = [0] * self.num_bindings  # positional bindings, used by TensorRT 8 enqueueV2
         self.model = model
         self.context = context
-        self.input_names = names[:num_inputs]
-        self.output_names = names[num_inputs:]
         self.idx = list(range(self.num_outputs))
 
     def __init_bindings(self) -> None:
@@ -242,27 +234,17 @@ class TRTModule(torch.nn.Module):
         inp_info = []
         out_info = []
         for i, name in enumerate(self.input_names):
-            if major_version >= 10:
-                dtype = self.dtypeMapping[self.model.get_tensor_dtype(name)]
-                shape = tuple(self.model.get_tensor_shape(name))
-            else:
-                assert self.model.get_binding_name(i) == name
-                dtype = self.dtypeMapping[self.model.get_binding_dtype(i)]
-                shape = tuple(self.model.get_binding_shape(i))
+            dtype = self.dtypeMapping[compat.trt_dtype(self.model, name, i)]
+            shape = compat.engine_shape(self.model, name, i)
             if -1 in shape:
-                idynamic |= True
+                idynamic = True
             inp_info.append(Tensor(name, dtype, shape))
         for i, name in enumerate(self.output_names):
             j = i + self.num_inputs
-            if major_version >= 10:
-                dtype = self.dtypeMapping[self.model.get_tensor_dtype(name)]
-                shape = tuple(self.model.get_tensor_shape(name))
-            else:
-                assert self.model.get_binding_name(j) == name
-                dtype = self.dtypeMapping[self.model.get_binding_dtype(j)]
-                shape = tuple(self.model.get_binding_shape(j))
+            dtype = self.dtypeMapping[compat.trt_dtype(self.model, name, j)]
+            shape = compat.engine_shape(self.model, name, j)
             if -1 in shape:
-                odynamic |= True
+                odynamic = True
             out_info.append(Tensor(name, dtype, shape))
 
         if not odynamic:
@@ -280,7 +262,8 @@ class TRTModule(torch.nn.Module):
             self.idx = [self.output_names.index(i) for i in desired]
 
     def forward(self, *inputs) -> tuple | torch.Tensor:
-        assert len(inputs) == self.num_inputs
+        if len(inputs) != self.num_inputs:
+            raise ValueError(f"expected {self.num_inputs} input(s), got {len(inputs)}")
         contiguous_inputs: list[torch.Tensor] = [i.contiguous() for i in inputs]
 
         if major_version >= 10:

@@ -14,7 +14,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
           ultralytics        trtexec
 ```
 
-- **End2End vs Normal**：End2End 把 NMS(`EfficientNMS_TRT`) 烘焙进引擎，直出 `num_dets/bboxes/scores/labels`（仅 det/seg 的 `export-*.py` 走此路）；Normal 是 ultralytics 原生 ONNX，后处理在消费端做。
+- **End2End vs Normal**：End2End 把 NMS(`EfficientNMS_TRT`) 内置到引擎，直出 `num_dets/bboxes/scores/labels`（仅 det/seg 的 `export-*.py` 走此路）；Normal 是 ultralytics 原生 ONNX，后处理在消费端做。
 - `export-det.py`/`export-seg.py` 用 `torch.onnx.export(..., dynamo=False)`（torch 2.x 的 dynamo 导出器会丢主干）。
 
 ## 常用命令
@@ -43,9 +43,9 @@ C++ 目标：`yolov8_detect / _detect_e2e / _seg / _seg_simple / _pose / _obb / 
 
 ### C++ 核心库 `csrc/core/`（libyolov8_core）
 
-每个任务（`csrc/apps/<task>.cpp`）是继承 `Engine` 的薄壳，只实现 `postprocess()`/`draw()`；公共流程全在 core：
+每个任务（`csrc/apps/<task>.cpp`）是继承 `Engine` 的子类，只实现 `postprocess()`/`draw()`；公共流程全在 core：
 
-- **`trt_compat.hpp`** — **全仓库唯一**带 `#ifdef TRT_10` 的文件，收敛 TRT 8/10 的 binding-index vs tensor-name API（`enqueueV2`↔`enqueueV3`、`destroy()`↔`delete`）。
+- **`trt_compat.hpp`** — **全仓库唯一**带 `#ifdef TRT_10` 的文件，统一 TRT 8/10 的 binding-index vs tensor-name API（`enqueueV2`↔`enqueueV3`、`destroy()`↔`delete`）。
 - **`trt_raii.hpp`** — `TrtUniquePtr`/`CudaStream`/`GenericBuffer` 管理 TRT/CUDA 资源（替代裸指针+手动释放）。
 - **`check.hpp`** — `CUDA_CHECK`/`TRT_CHECK` 抛 `TrtException`（替代 Release 下失效的 `assert`）。
 - **`engine.hpp/cpp`** — 基类：加载/binding 枚举(经 compat)/`make_pipe`/`copy_from_mat`(letterbox)/`infer`。
@@ -62,14 +62,14 @@ C++ 目标：`yolov8_detect / _detect_e2e / _seg / _seg_simple / _pose / _obb / 
 
 - `engine.py` — `TRTModule`(torch 后端，已版本自适应) + `EngineBuilder`(ONNX→engine)。
 - `compat.py` — TRT 8/10 版本助手（`io_names`/`np_dtype`/`engine_shape`）。
-- `backend.py` — `Backend` 基类 + `CudartBackend`/`PycudaBackend`（统一三后端的非 torch 路径，**新增了 cudart/pycuda 原先缺失的 TRT10 支持**）；`cudart_api.py`/`pycuda_api.py` 是其薄别名。
+- `backend.py` — `Backend` 基类 + `CudartBackend`/`PycudaBackend`（统一三后端的非 torch 路径，**新增了 cudart/pycuda 原先缺失的 TRT10 支持**）；`cudart_api.py`/`pycuda_api.py` 是其别名。
 - `labels.py` — 从 `data/labels/*.txt` 读类别 + 颜色/骨架；`config.py` 重导出它（向后兼容）。
 - `tasks/{det,seg,pose,obb,cls}.py` — 各任务 `process()`，复用 `utils.py`(numpy) 与 `torch_utils.py`(torch) 的纯函数。
 - `infer.py`(根) 统一入口；`utils.py` 纯函数(letterbox/blob/NMS/postprocess) 是单测对象。
 
 ## 关键约定与易错点
 
-- **阈值烘焙进图**：det End2End 的 conf/iou/topk 写入 ONNX，改值须重新导出。
+- **阈值写入引擎**：det End2End 的 conf/iou/topk 写入 ONNX，改值须重新导出。
 - **TensorRT 版本前后一致**：engine 与链接/运行的 TRT 必须同版本；engine 不跨版本通用。
 - **运行时 `LD_LIBRARY_PATH`** 必须含所链接 TRT 的 lib（TRT8 还需 cuDNN 8）。
 - **TRT 11 的 trtexec** 不接受相对 `--onnx` 路径，用绝对路径。
