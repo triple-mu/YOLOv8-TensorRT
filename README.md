@@ -48,6 +48,8 @@ infer.py  build.py  export-det.py  export-seg.py  benchmark.py
 
 ## Setup
 
+> The repo is small; for the lightest checkout use a shallow clone: `git clone --depth 1 <url>` (latest code only, no history).
+
 `CUDA` (≥ 11.4) and `TensorRT` (≥ 8.4) must already be installed system-wide — `nvidia-smi` and `trtexec --version` should both work. Then install the Python deps:
 
 ```shell

@@ -48,6 +48,8 @@ infer.py  build.py  export-det.py  export-seg.py  benchmark.py
 
 ## 环境准备
 
+> 仓库很小；想要最轻的检出可用浅克隆：`git clone --depth 1 <url>`（只取最新代码、不含历史）。
+
 `CUDA`（≥ 11.4）与 `TensorRT`（≥ 8.4）需已在系统中安装 —— `nvidia-smi` 与 `trtexec --version` 都应可用。然后安装 Python 依赖：
 
 ```shell
