@@ -38,8 +38,13 @@ public:
     void print_profile() const;  // prints the per-layer report if --profile was set
 
 protected:
-    // Preprocess one image into an NCHW blob. Default is letterbox; cls overrides it.
+    // Preprocess one image into an NCHW blob (CPU path). Default is letterbox; cls overrides it.
     virtual void preprocess(const cv::Mat& image, cv::Mat& blob);
+    // Whether the GPU preprocess path should letterbox (true) or plain-resize (false, cls).
+    virtual bool letterbox_preproc() const
+    {
+        return true;
+    }
 
     InferConfig          config_;
     std::vector<Binding> input_bindings_;
@@ -54,6 +59,7 @@ private:
     std::vector<DeviceBuffer>                 device_buffers_;
     std::vector<HostPinnedBuffer>             host_buffers_;
     std::vector<void*>                        device_ptrs_;  // [inputs..., outputs...]
+    DeviceBuffer                              raw_input_;    // uint8 upload buffer for --gpu-preprocess
     CudaStream                                stream_;
     TrtUniquePtr<nvinfer1::IRuntime>          runtime_;
     TrtUniquePtr<nvinfer1::ICudaEngine>       engine_;

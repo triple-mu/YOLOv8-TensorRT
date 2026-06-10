@@ -77,6 +77,18 @@ cmake -S . -B build -DTensorRT_ROOT=/path/to/TensorRT -DCMAKE_CXX_STANDARD=14
 cmake --build build -j
 ```
 
+## GPU preprocessing (opt-in)
+
+By default preprocessing (letterbox + BGR→RGB + normalize) runs on the CPU via OpenCV.
+Passing `--gpu-preprocess` at runtime instead uploads the raw uint8 image and does the
+whole transform in a CUDA kernel, writing the network input directly — no CPU/OpenCV step.
+
+It is compiled only when CMake finds a CUDA compiler (the configure log prints
+`GPU preprocessing: enabled`); otherwise `--gpu-preprocess` throws and the CPU path is
+unaffected. Set GPU architectures with `-DCMAKE_CUDA_ARCHITECTURES=86` (default
+`75;86;89;90`). The kernel's bilinear resize is not bit-identical to `cv::resize`, so
+detections match the CPU path within tolerance, not byte-for-byte.
+
 ## Tests
 
 ```shell

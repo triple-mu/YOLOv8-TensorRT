@@ -117,12 +117,39 @@ void Engine::preprocess(const cv::Mat& image, cv::Mat& blob)
 
 void Engine::copy_from_mat(const cv::Mat& image)
 {
-    cv::Mat blob;
-    preprocess(image, blob);
-
     const auto& in = input_bindings_[0];
-    CUDA_CHECK(cudaMemcpyAsync(
-        device_ptrs_[0], blob.ptr<float>(), blob.total() * blob.elemSize(), cudaMemcpyHostToDevice, stream_.get()));
+
+    if (config_.gpu_preprocess) {
+#ifdef YOLOV8_GPU_PREPROCESS
+        // Upload the raw uint8 BGR image and let a CUDA kernel produce the NCHW float
+        // blob directly in the input buffer — no CPU letterbox/blob.
+        cv::Mat      src   = image.isContinuous() ? image : image.clone();
+        const size_t bytes = src.total() * src.elemSize();
+        if (raw_input_.bytes() < bytes) {
+            raw_input_ = DeviceBuffer(bytes);  // grow (move-assign frees the old buffer)
+        }
+        CUDA_CHECK(cudaMemcpyAsync(raw_input_.data(), src.data, bytes, cudaMemcpyHostToDevice, stream_.get()));
+        auto*       dst = static_cast<float*>(device_ptrs_[0]);
+        const int   dw = config_.input_size.width, dh = config_.input_size.height;
+        const auto* raw = static_cast<const unsigned char*>(raw_input_.data());
+        if (letterbox_preproc()) {
+            letterbox_cuda(raw, src.cols, src.rows, dst, dw, dh, pparam_, stream_.get());
+        }
+        else {
+            resize_cuda(raw, src.cols, src.rows, dst, dw, dh, pparam_, stream_.get());
+        }
+        CUDA_CHECK(cudaGetLastError());
+#else
+        throw TrtException("--gpu-preprocess requires a CUDA-enabled build (no nvcc found at configure time)");
+#endif
+    }
+    else {
+        cv::Mat blob;
+        preprocess(image, blob);
+        CUDA_CHECK(cudaMemcpyAsync(
+            device_ptrs_[0], blob.ptr<float>(), blob.total() * blob.elemSize(), cudaMemcpyHostToDevice, stream_.get()));
+    }
+
     const nvinfer1::Dims4 shape{1, 3, config_.input_size.height, config_.input_size.width};
     compat::set_input_shape(context_.get(), 0, in.name, shape);
     compat::set_tensor_address(context_.get(), in.name, device_ptrs_[0]);
