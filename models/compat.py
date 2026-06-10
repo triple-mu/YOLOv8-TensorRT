@@ -25,8 +25,13 @@ def io_names(engine) -> tuple[list[str], list[str]]:
     return inputs, outputs
 
 
+def trt_dtype(engine, name: str, index: int):
+    """Raw TensorRT ``DataType`` for an IO tensor (use with a dtype mapping)."""
+    return engine.get_tensor_dtype(name) if is_trt10 else engine.get_binding_dtype(index)
+
+
 def np_dtype(engine, name: str, index: int):
-    return trt.nptype(engine.get_tensor_dtype(name) if is_trt10 else engine.get_binding_dtype(index))
+    return trt.nptype(trt_dtype(engine, name, index))
 
 
 def engine_shape(engine, name: str, index: int) -> tuple:
