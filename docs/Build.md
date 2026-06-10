@@ -93,10 +93,13 @@ detections match the CPU path within tolerance, not byte-for-byte.
 
 The postprocess (decode + NMS) can run inside the engine as a custom TensorRT plugin
 instead of on the host: `YoloDetPostprocess` (detection, an alternative to the built-in
-`EfficientNMS_TRT`) and `YoloSegPostprocess` (segmentation — also gathers each kept
-box's mask coefficients; proto matmul + mask assembly still run outside the engine).
-Build the plugin library — like the engine, it is tied to the TensorRT version it is
-built against, so use the same `-DTensorRT_ROOT`:
+`EfficientNMS_TRT`), `YoloSegPostprocess` (segmentation — also gathers each kept box's
+mask coefficients; proto matmul + mask assembly still run outside) and
+`YoloPosePostprocess` (pose — also gathers each kept box's 17 keypoints). det/seg attach
+the plugin via the export scripts' in-graph head; pose uses the raw ultralytics export
+plus `onnx_graphsurgeon` (`export-pose.py`) to append the plugin node. Build the plugin
+library — like the engine, it is tied to the TensorRT version it is built against, so use
+the same `-DTensorRT_ROOT`:
 
 ```shell
 cmake -S . -B build -DTensorRT_ROOT=/data/TensorRT-10.16.1.11 -DBUILD_PLUGINS=ON
