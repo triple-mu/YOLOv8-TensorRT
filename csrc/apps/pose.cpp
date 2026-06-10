@@ -19,6 +19,59 @@ public:
     void postprocess(std::vector<Object>& objs) override
     {
         objs.clear();
+        if (binding_index("num_dets") >= 0) {
+            postprocess_plugin(objs);
+        }
+        else {
+            postprocess_raw(objs);
+        }
+    }
+
+private:
+    int binding_index(const std::string& name) const
+    {
+        for (size_t i = 0; i < output_bindings_.size(); ++i) {
+            if (output_bindings_[i].name == name) {
+                return static_cast<int>(i);
+            }
+        }
+        return -1;
+    }
+
+    // YoloPosePostprocess plugin: NMS + kpt gather in-engine; only rescale here.
+    void postprocess_plugin(std::vector<Object>& objs)
+    {
+        const int*   num_dets = static_cast<const int*>(host_ptrs_[binding_index("num_dets")]);
+        const float* boxes    = static_cast<const float*>(host_ptrs_[binding_index("bboxes")]);
+        const float* scores   = static_cast<const float*>(host_ptrs_[binding_index("scores")]);
+        const int*   labels   = static_cast<const int*>(host_ptrs_[binding_index("labels")]);
+        const float* kpts     = static_cast<const float*>(host_ptrs_[binding_index("kpts")]);
+        const float  dw = pparam_.dw, dh = pparam_.dh;
+        const float  width = pparam_.width, height = pparam_.height, ratio = pparam_.ratio;
+
+        for (int i = 0; i < num_dets[0]; ++i) {
+            const float* bp = boxes + i * 4;
+            // Clamp all four corners, then derive w/h (matches detect_e2e / segment).
+            const float x0 = clamp((bp[0] - dw) * ratio, 0.f, width);
+            const float y0 = clamp((bp[1] - dh) * ratio, 0.f, height);
+            const float x1 = clamp((bp[2] - dw) * ratio, 0.f, width);
+            const float y1 = clamp((bp[3] - dh) * ratio, 0.f, height);
+            Object      obj;
+            obj.rect        = cv::Rect_<float>(x0, y0, x1 - x0, y1 - y0);
+            obj.prob        = scores[i];
+            obj.label       = labels[i];
+            const float* kp = kpts + i * 51;
+            for (int k = 0; k < 17; ++k) {
+                obj.kps.push_back(clamp((kp[3 * k] - dw) * ratio, 0.f, width));
+                obj.kps.push_back(clamp((kp[3 * k + 1] - dh) * ratio, 0.f, height));
+                obj.kps.push_back(kp[3 * k + 2]);
+            }
+            objs.push_back(obj);
+        }
+    }
+
+    void postprocess_raw(std::vector<Object>& objs)
+    {
         const int   num_anchors  = output_bindings_[0].dims.d[2];
         const int   num_channels = output_bindings_[0].dims.d[1];
         const int   num_cls      = num_channels - 4 - 51;  // 51 = 17 keypoints x 3
@@ -93,6 +146,7 @@ public:
         }
     }
 
+public:
     void draw(const cv::Mat& image, cv::Mat& res, const std::vector<Object>& objs) const override
     {
         const Palette& kps_colors  = pose::kps_colors();

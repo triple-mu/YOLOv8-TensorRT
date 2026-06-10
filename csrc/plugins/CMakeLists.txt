@@ -5,6 +5,7 @@
 add_library(yolov8_plugins SHARED
     src/det_plugin.cu
     src/seg_plugin.cu
+    src/pose_plugin.cu
 )
 
 set_target_properties(yolov8_plugins PROPERTIES
