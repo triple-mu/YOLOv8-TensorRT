@@ -27,55 +27,47 @@ struct SegParams {
     int   score_activation = 0;
 };
 
-// Greedy NMS over score-sorted anchors (class-aware), gathering the nm mask
-// coefficients of each kept box.
-__global__ void nms_seg_kernel(const float* boxes,
-                               const float* coeffs,
-                               int          nm,
-                               const float* sorted_score,
-                               const int*   sorted_idx,
-                               const int*   cls,
-                               int          num_anchors,
-                               float        score_thr,
-                               float        iou_thr,
-                               int          topk,
-                               int*         num_dets,
-                               float*       out_boxes,
-                               float*       out_scores,
-                               int*         out_classes,
-                               float*       out_coeffs)
+// Parallel NMS suppression is shared (suppress_xyxy_kernel in nms_common.cuh).
+// Compaction (single thread, no IoU): gather survivors in score order up to top-k,
+// copying each kept box's nm mask coefficients.
+__global__ void seg_compact_kernel(const float* boxes,
+                                   const float* coeffs,
+                                   int          nm,
+                                   const float* sorted_score,
+                                   const int*   sorted_idx,
+                                   const int*   cls,
+                                   const int*   flag,
+                                   int          num_anchors,
+                                   float        score_thr,
+                                   int          topk,
+                                   int*         num_dets,
+                                   float*       out_boxes,
+                                   float*       out_scores,
+                                   int*         out_classes,
+                                   float*       out_coeffs)
 {
     int keep = 0;
     for (int r = 0; r < num_anchors && keep < topk; ++r) {
-        const float sc = sorted_score[r];
-        if (sc <= score_thr) {
+        if (sorted_score[r] <= score_thr) {
             break;
         }
-        const int    a  = sorted_idx[r];
-        const float* bx = boxes + static_cast<size_t>(a) * 4;
-        const int    cl = cls[a];
-
-        bool suppressed = false;
-        for (int k = 0; k < keep; ++k) {
-            if (out_classes[k] == cl && iou_xyxy(bx, out_boxes + k * 4) > iou_thr) {
-                suppressed = true;
-                break;
-            }
+        if (!flag[r]) {
+            continue;
         }
-        if (!suppressed) {
-            out_boxes[keep * 4 + 0] = bx[0];
-            out_boxes[keep * 4 + 1] = bx[1];
-            out_boxes[keep * 4 + 2] = bx[2];
-            out_boxes[keep * 4 + 3] = bx[3];
-            out_scores[keep]        = sc;
-            out_classes[keep]       = cl;
-            const float* cf         = coeffs + static_cast<size_t>(a) * nm;
-            float*       dst        = out_coeffs + static_cast<size_t>(keep) * nm;
-            for (int j = 0; j < nm; ++j) {
-                dst[j] = cf[j];
-            }
-            ++keep;
+        const int    a          = sorted_idx[r];
+        const float* bx         = boxes + static_cast<size_t>(a) * 4;
+        out_boxes[keep * 4 + 0] = bx[0];
+        out_boxes[keep * 4 + 1] = bx[1];
+        out_boxes[keep * 4 + 2] = bx[2];
+        out_boxes[keep * 4 + 3] = bx[3];
+        out_scores[keep]        = sorted_score[r];
+        out_classes[keep]       = cls[a];
+        const float* cf         = coeffs + static_cast<size_t>(a) * nm;
+        float*       dst        = out_coeffs + static_cast<size_t>(keep) * nm;
+        for (int j = 0; j < nm; ++j) {
+            dst[j] = cf[j];
         }
+        ++keep;
     }
     *num_dets = keep;
 }
@@ -192,29 +184,33 @@ public:
         int*   idx_in   = reinterpret_cast<int*>(keys_out + A);
         int*   idx_out  = idx_in + A;
         int*   cls_buf  = idx_out + A;
+        int*   flag     = cls_buf + A;
 
         const int t  = params_.max_output;
         const int bk = 256;
         const int gd = (A + bk - 1) / bk;
         for (int b = 0; b < B; ++b) {
+            const float* bx = boxes + static_cast<size_t>(b) * A * 4;
             argmax_kernel<<<gd, bk, 0, stream>>>(scores + static_cast<size_t>(b) * A * nc, A, nc, keys_in, cls_buf);
             iota_kernel<<<gd, bk, 0, stream>>>(idx_in, A);
             sort_scores_desc(workspace, A, keys_in, keys_out, idx_in, idx_out, stream);
-            nms_seg_kernel<<<1, 1, 0, stream>>>(boxes + static_cast<size_t>(b) * A * 4,
-                                                coeffs + static_cast<size_t>(b) * A * nm,
-                                                nm,
-                                                keys_out,
-                                                idx_out,
-                                                cls_buf,
-                                                A,
-                                                params_.score_threshold,
-                                                params_.iou_threshold,
-                                                t,
-                                                num_dets + b,
-                                                out_boxes + static_cast<size_t>(b) * t * 4,
-                                                out_scores + static_cast<size_t>(b) * t,
-                                                out_classes + static_cast<size_t>(b) * t,
-                                                out_coeffs + static_cast<size_t>(b) * t * nm);
+            suppress_xyxy_kernel<<<gd, bk, 0, stream>>>(
+                bx, keys_out, idx_out, cls_buf, A, params_.score_threshold, params_.iou_threshold, flag);
+            seg_compact_kernel<<<1, 1, 0, stream>>>(bx,
+                                                    coeffs + static_cast<size_t>(b) * A * nm,
+                                                    nm,
+                                                    keys_out,
+                                                    idx_out,
+                                                    cls_buf,
+                                                    flag,
+                                                    A,
+                                                    params_.score_threshold,
+                                                    t,
+                                                    num_dets + b,
+                                                    out_boxes + static_cast<size_t>(b) * t * 4,
+                                                    out_scores + static_cast<size_t>(b) * t,
+                                                    out_classes + static_cast<size_t>(b) * t,
+                                                    out_coeffs + static_cast<size_t>(b) * t * nm);
         }
         return cudaGetLastError() == cudaSuccess ? 0 : -1;
     }

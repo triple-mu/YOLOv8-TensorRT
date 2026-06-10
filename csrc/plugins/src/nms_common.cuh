@@ -54,11 +54,46 @@ static __global__ void iota_kernel(int* v, int n)
     }
 }
 
-// Scratch layout shared by the plugins: keys in/out (float) + idx in/out + class (int),
-// all length A and 256-aligned, followed by cub's radix-sort temp storage.
+// Parallel NMS suppression for corner (xyxy) boxes, one thread per score-sorted anchor:
+// flag[r] = 0 iff a higher-scoring same-class box overlaps anchor r > iou_thr (the
+// dependency-free parallel rule used by EfficientNMS). Used by the det and seg plugins;
+// pose/obb decode their boxes differently and provide their own suppression.
+static __global__ void suppress_xyxy_kernel(const float* boxes,
+                                            const float* sorted_score,
+                                            const int*   sorted_idx,
+                                            const int*   cls,
+                                            int          num_anchors,
+                                            float        score_thr,
+                                            float        iou_thr,
+                                            int*         flag)
+{
+    const int r = blockIdx.x * blockDim.x + threadIdx.x;
+    if (r >= num_anchors) {
+        return;
+    }
+    if (sorted_score[r] <= score_thr) {
+        flag[r] = 0;
+        return;
+    }
+    const int    a  = sorted_idx[r];
+    const float* bx = boxes + static_cast<size_t>(a) * 4;
+    const int    cl = cls[a];
+    for (int p = 0; p < r; ++p) {  // sorted desc: every p < r has score >= score[r]
+        const int ap = sorted_idx[p];
+        if (cls[ap] == cl && iou_xyxy(bx, boxes + static_cast<size_t>(ap) * 4) > iou_thr) {
+            flag[r] = 0;
+            return;
+        }
+    }
+    flag[r] = 1;
+}
+
+// Scratch layout shared by the plugins: keys in/out (float) + idx in/out + class +
+// keep-flag (int), all length A and 256-aligned, followed by cub's radix-sort temp.
+// The keep-flag holds the parallel-NMS survivor mask.
 inline size_t nms_arrays_bytes(int A)
 {
-    const size_t b = static_cast<size_t>(A) * (2 * sizeof(float) + 3 * sizeof(int));
+    const size_t b = static_cast<size_t>(A) * (2 * sizeof(float) + 4 * sizeof(int));
     return (b + 255) & ~static_cast<size_t>(255);
 }
 

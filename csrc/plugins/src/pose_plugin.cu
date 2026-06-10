@@ -51,56 +51,89 @@ __global__ void pose_argmax_kernel(const float* data, int A, int C, int nc, floa
     best_cls[a]   = bi;
 }
 
-// Greedy NMS (class-aware); decodes center-xywh to corner, gathers 51 keypoints.
-__global__ void pose_nms_kernel(const float* data,
-                                int          A,
-                                int          C,
-                                int          nc,
-                                const float* sorted_score,
-                                const int*   sorted_idx,
-                                const int*   cls,
-                                float        score_thr,
-                                float        iou_thr,
-                                int          topk,
-                                int*         num_dets,
-                                float*       out_boxes,
-                                float*       out_scores,
-                                int*         out_classes,
-                                float*       out_kpts)
+__device__ inline void pose_corner(const float* row, float* box)
+{
+    const float cx = row[0], cy = row[1], w = row[2], h = row[3];
+    box[0] = cx - 0.5f * w;
+    box[1] = cy - 0.5f * h;
+    box[2] = cx + 0.5f * w;
+    box[3] = cy + 0.5f * h;
+}
+
+// Parallel NMS suppression (one thread per score-sorted anchor); decodes center-xywh to
+// corner for axis-aligned IoU. flag[r] = 1 means survivor.
+__global__ void pose_suppress_kernel(const float* data,
+                                     int          A,
+                                     int          C,
+                                     const float* sorted_score,
+                                     const int*   sorted_idx,
+                                     const int*   cls,
+                                     float        score_thr,
+                                     float        iou_thr,
+                                     int*         flag)
+{
+    const int r = blockIdx.x * blockDim.x + threadIdx.x;
+    if (r >= A) {
+        return;
+    }
+    if (sorted_score[r] <= score_thr) {
+        flag[r] = 0;
+        return;
+    }
+    const int a = sorted_idx[r];
+    float     box[4];
+    pose_corner(data + static_cast<size_t>(a) * C, box);
+    const int cl = cls[a];
+    for (int p = 0; p < r; ++p) {
+        const int ap = sorted_idx[p];
+        if (cls[ap] == cl) {
+            float bp[4];
+            pose_corner(data + static_cast<size_t>(ap) * C, bp);
+            if (iou_xyxy(box, bp) > iou_thr) {
+                flag[r] = 0;
+                return;
+            }
+        }
+    }
+    flag[r] = 1;
+}
+
+// Compaction (single thread): gather survivors in score order, copying box + 51 kpts.
+__global__ void pose_compact_kernel(const float* data,
+                                    int          A,
+                                    int          C,
+                                    int          nc,
+                                    const float* sorted_score,
+                                    const int*   sorted_idx,
+                                    const int*   cls,
+                                    const int*   flag,
+                                    float        score_thr,
+                                    int          topk,
+                                    int*         num_dets,
+                                    float*       out_boxes,
+                                    float*       out_scores,
+                                    int*         out_classes,
+                                    float*       out_kpts)
 {
     int keep = 0;
     for (int r = 0; r < A && keep < topk; ++r) {
-        const float sc = sorted_score[r];
-        if (sc <= score_thr) {
+        if (sorted_score[r] <= score_thr) {
             break;
+        }
+        if (!flag[r]) {
+            continue;
         }
         const int    a   = sorted_idx[r];
         const float* row = data + static_cast<size_t>(a) * C;
-        const float  cx = row[0], cy = row[1], w = row[2], h = row[3];
-        const float  box[4] = {cx - 0.5f * w, cy - 0.5f * h, cx + 0.5f * w, cy + 0.5f * h};
-        const int    cl     = cls[a];
-
-        bool suppressed = false;
-        for (int k = 0; k < keep; ++k) {
-            if (out_classes[k] == cl && iou_xyxy(box, out_boxes + k * 4) > iou_thr) {
-                suppressed = true;
-                break;
-            }
+        pose_corner(row, out_boxes + keep * 4);
+        out_scores[keep]  = sorted_score[r];
+        out_classes[keep] = cls[a];
+        const float* kp   = row + 4 + nc;
+        float*       dst  = out_kpts + static_cast<size_t>(keep) * kKpt;
+        for (int j = 0; j < kKpt; ++j) {
+            dst[j] = kp[j];
         }
-        if (!suppressed) {
-            out_boxes[keep * 4 + 0] = box[0];
-            out_boxes[keep * 4 + 1] = box[1];
-            out_boxes[keep * 4 + 2] = box[2];
-            out_boxes[keep * 4 + 3] = box[3];
-            out_scores[keep]        = sc;
-            out_classes[keep]       = cl;
-            const float* kp         = row + 4 + nc;
-            float*       dst        = out_kpts + static_cast<size_t>(keep) * kKpt;
-            for (int j = 0; j < kKpt; ++j) {
-                dst[j] = kp[j];
-            }
-            ++keep;
-        }
+        ++keep;
     }
     *num_dets = keep;
 }
@@ -222,6 +255,7 @@ public:
         int*   idx_in   = reinterpret_cast<int*>(keys_out + A);
         int*   idx_out  = idx_in + A;
         int*   cls_buf  = idx_out + A;
+        int*   flag     = cls_buf + A;
 
         const int t  = params_.max_output;
         const int bk = 256;
@@ -231,21 +265,23 @@ public:
             pose_argmax_kernel<<<gd, bk, 0, stream>>>(d, A, C, nc, keys_in, cls_buf);
             iota_kernel<<<gd, bk, 0, stream>>>(idx_in, A);
             sort_scores_desc(workspace, A, keys_in, keys_out, idx_in, idx_out, stream);
-            pose_nms_kernel<<<1, 1, 0, stream>>>(d,
-                                                 A,
-                                                 C,
-                                                 nc,
-                                                 keys_out,
-                                                 idx_out,
-                                                 cls_buf,
-                                                 params_.score_threshold,
-                                                 params_.iou_threshold,
-                                                 t,
-                                                 num_dets + b,
-                                                 out_boxes + static_cast<size_t>(b) * t * 4,
-                                                 out_scores + static_cast<size_t>(b) * t,
-                                                 out_classes + static_cast<size_t>(b) * t,
-                                                 out_kpts + static_cast<size_t>(b) * t * kKpt);
+            pose_suppress_kernel<<<gd, bk, 0, stream>>>(
+                d, A, C, keys_out, idx_out, cls_buf, params_.score_threshold, params_.iou_threshold, flag);
+            pose_compact_kernel<<<1, 1, 0, stream>>>(d,
+                                                     A,
+                                                     C,
+                                                     nc,
+                                                     keys_out,
+                                                     idx_out,
+                                                     cls_buf,
+                                                     flag,
+                                                     params_.score_threshold,
+                                                     t,
+                                                     num_dets + b,
+                                                     out_boxes + static_cast<size_t>(b) * t * 4,
+                                                     out_scores + static_cast<size_t>(b) * t,
+                                                     out_classes + static_cast<size_t>(b) * t,
+                                                     out_kpts + static_cast<size_t>(b) * t * kKpt);
         }
         return cudaGetLastError() == cudaSuccess ? 0 : -1;
     }

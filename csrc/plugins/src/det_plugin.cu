@@ -29,47 +29,39 @@ struct DetParams {
     int   score_activation = 0;    // scores already sigmoided upstream
 };
 
-// Single-thread greedy NMS over score-sorted anchors (class-aware: only same-class
-// boxes suppress each other). Anchor count after threshold is small, so this is cheap.
-__global__ void nms_kernel(const float* boxes,
-                           const float* sorted_score,
-                           const int*   sorted_idx,
-                           const int*   cls,
-                           int          num_anchors,
-                           float        score_thr,
-                           float        iou_thr,
-                           int          topk,
-                           int*         num_dets,
-                           float*       out_boxes,
-                           float*       out_scores,
-                           int*         out_classes)
+// Parallel NMS suppression is shared (suppress_xyxy_kernel in nms_common.cuh).
+// Part 2 (single thread, no IoU): gather survivors in score order up to
+// top-k. Cheap O(candidates) — the expensive O(M^2) overlap work is done in parallel above.
+__global__ void compact_kernel(const float* boxes,
+                               const float* sorted_score,
+                               const int*   sorted_idx,
+                               const int*   cls,
+                               const int*   flag,
+                               int          num_anchors,
+                               float        score_thr,
+                               int          topk,
+                               int*         num_dets,
+                               float*       out_boxes,
+                               float*       out_scores,
+                               int*         out_classes)
 {
     int keep = 0;
     for (int r = 0; r < num_anchors && keep < topk; ++r) {
-        const float sc = sorted_score[r];
-        if (sc <= score_thr) {
-            break;  // sorted descending: nothing else can pass
+        if (sorted_score[r] <= score_thr) {
+            break;
         }
-        const int    a  = sorted_idx[r];
-        const float* bx = boxes + static_cast<size_t>(a) * 4;
-        const int    cl = cls[a];
-
-        bool suppressed = false;
-        for (int k = 0; k < keep; ++k) {
-            if (out_classes[k] == cl && iou_xyxy(bx, out_boxes + k * 4) > iou_thr) {
-                suppressed = true;
-                break;
-            }
+        if (!flag[r]) {
+            continue;
         }
-        if (!suppressed) {
-            out_boxes[keep * 4 + 0] = bx[0];
-            out_boxes[keep * 4 + 1] = bx[1];
-            out_boxes[keep * 4 + 2] = bx[2];
-            out_boxes[keep * 4 + 3] = bx[3];
-            out_scores[keep]        = sc;
-            out_classes[keep]       = cl;
-            ++keep;
-        }
+        const int    a          = sorted_idx[r];
+        const float* bx         = boxes + static_cast<size_t>(a) * 4;
+        out_boxes[keep * 4 + 0] = bx[0];
+        out_boxes[keep * 4 + 1] = bx[1];
+        out_boxes[keep * 4 + 2] = bx[2];
+        out_boxes[keep * 4 + 3] = bx[3];
+        out_scores[keep]        = sorted_score[r];
+        out_classes[keep]       = cls[a];
+        ++keep;
     }
     *num_dets = keep;
 }
@@ -184,26 +176,31 @@ public:
         int*   idx_in   = reinterpret_cast<int*>(keys_out + A);
         int*   idx_out  = idx_in + A;
         int*   cls_buf  = idx_out + A;
+        int*   flag     = cls_buf + A;
 
+        const int t     = params_.max_output;
         const int block = 256;
         const int grid  = (A + block - 1) / block;
         for (int b = 0; b < B; ++b) {
+            const float* bx = boxes + static_cast<size_t>(b) * A * 4;
             argmax_kernel<<<grid, block, 0, stream>>>(
                 scores + static_cast<size_t>(b) * A * nc, A, nc, keys_in, cls_buf);
             iota_kernel<<<grid, block, 0, stream>>>(idx_in, A);
             sort_scores_desc(workspace, A, keys_in, keys_out, idx_in, idx_out, stream);
-            nms_kernel<<<1, 1, 0, stream>>>(boxes + static_cast<size_t>(b) * A * 4,
-                                            keys_out,
-                                            idx_out,
-                                            cls_buf,
-                                            A,
-                                            params_.score_threshold,
-                                            params_.iou_threshold,
-                                            params_.max_output,
-                                            num_dets + b,
-                                            out_boxes + static_cast<size_t>(b) * params_.max_output * 4,
-                                            out_scores + static_cast<size_t>(b) * params_.max_output,
-                                            out_classes + static_cast<size_t>(b) * params_.max_output);
+            suppress_xyxy_kernel<<<grid, block, 0, stream>>>(
+                bx, keys_out, idx_out, cls_buf, A, params_.score_threshold, params_.iou_threshold, flag);
+            compact_kernel<<<1, 1, 0, stream>>>(bx,
+                                                keys_out,
+                                                idx_out,
+                                                cls_buf,
+                                                flag,
+                                                A,
+                                                params_.score_threshold,
+                                                t,
+                                                num_dets + b,
+                                                out_boxes + static_cast<size_t>(b) * t * 4,
+                                                out_scores + static_cast<size_t>(b) * t,
+                                                out_classes + static_cast<size_t>(b) * t);
         }
         return cudaGetLastError() == cudaSuccess ? 0 : -1;
     }

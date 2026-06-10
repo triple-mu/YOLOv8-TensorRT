@@ -86,52 +86,81 @@ __global__ void obb_argmax_kernel(const float* data, int A, int C, int nc, float
     best_cls[a]   = bi;
 }
 
-// Greedy rotated NMS (class-aware). Keeps center box (cx,cy,w,h) + angle for each survivor.
-__global__ void obb_nms_kernel(const float* data,
-                               int          A,
-                               int          C,
-                               int          nc,
-                               const float* sorted_score,
-                               const int*   sorted_idx,
-                               const int*   cls,
-                               float        score_thr,
-                               float        iou_thr,
-                               int          topk,
-                               int*         num_dets,
-                               float*       out_boxes,
-                               float*       out_scores,
-                               int*         out_classes,
-                               float*       out_angles)
+// Parallel rotated-NMS suppression (one thread per score-sorted anchor): mark suppressed
+// iff a higher-scoring same-class box has ProbIoU > iou_thr. flag[r] = 1 means survivor.
+__global__ void obb_suppress_kernel(const float* data,
+                                    int          A,
+                                    int          C,
+                                    int          nc,
+                                    const float* sorted_score,
+                                    const int*   sorted_idx,
+                                    const int*   cls,
+                                    float        score_thr,
+                                    float        iou_thr,
+                                    int*         flag)
+{
+    const int r = blockIdx.x * blockDim.x + threadIdx.x;
+    if (r >= A) {
+        return;
+    }
+    if (sorted_score[r] <= score_thr) {
+        flag[r] = 0;
+        return;
+    }
+    const int    a      = sorted_idx[r];
+    const float* row    = data + static_cast<size_t>(a) * C;
+    const float  box[4] = {row[0], row[1], row[2], row[3]};
+    const float  ang    = row[4 + nc];
+    const int    cl     = cls[a];
+    for (int p = 0; p < r; ++p) {
+        const int ap = sorted_idx[p];
+        if (cls[ap] == cl) {
+            const float* rp    = data + static_cast<size_t>(ap) * C;
+            const float  bp[4] = {rp[0], rp[1], rp[2], rp[3]};
+            if (iou_probiou(box, ang, bp, rp[4 + nc]) > iou_thr) {
+                flag[r] = 0;
+                return;
+            }
+        }
+    }
+    flag[r] = 1;
+}
+
+// Compaction (single thread): gather survivors in score order, copying center box + angle.
+__global__ void obb_compact_kernel(const float* data,
+                                   int          A,
+                                   int          C,
+                                   int          nc,
+                                   const float* sorted_score,
+                                   const int*   sorted_idx,
+                                   const int*   cls,
+                                   const int*   flag,
+                                   float        score_thr,
+                                   int          topk,
+                                   int*         num_dets,
+                                   float*       out_boxes,
+                                   float*       out_scores,
+                                   int*         out_classes,
+                                   float*       out_angles)
 {
     int keep = 0;
     for (int r = 0; r < A && keep < topk; ++r) {
-        const float sc = sorted_score[r];
-        if (sc <= score_thr) {
+        if (sorted_score[r] <= score_thr) {
             break;
         }
-        const int    a      = sorted_idx[r];
-        const float* row    = data + static_cast<size_t>(a) * C;
-        const float  box[4] = {row[0], row[1], row[2], row[3]};
-        const float  ang    = row[4 + nc];
-        const int    cl     = cls[a];
-
-        bool suppressed = false;
-        for (int k = 0; k < keep; ++k) {
-            if (out_classes[k] == cl && iou_probiou(box, ang, out_boxes + k * 4, out_angles[k]) > iou_thr) {
-                suppressed = true;
-                break;
-            }
+        if (!flag[r]) {
+            continue;
         }
-        if (!suppressed) {
-            out_boxes[keep * 4 + 0] = box[0];
-            out_boxes[keep * 4 + 1] = box[1];
-            out_boxes[keep * 4 + 2] = box[2];
-            out_boxes[keep * 4 + 3] = box[3];
-            out_scores[keep]        = sc;
-            out_classes[keep]       = cl;
-            out_angles[keep]        = ang;
-            ++keep;
-        }
+        const int    a          = sorted_idx[r];
+        const float* row        = data + static_cast<size_t>(a) * C;
+        out_boxes[keep * 4 + 0] = row[0];
+        out_boxes[keep * 4 + 1] = row[1];
+        out_boxes[keep * 4 + 2] = row[2];
+        out_boxes[keep * 4 + 3] = row[3];
+        out_scores[keep]        = sorted_score[r];
+        out_classes[keep]       = cls[a];
+        out_angles[keep]        = row[4 + nc];
+        ++keep;
     }
     *num_dets = keep;
 }
@@ -253,6 +282,7 @@ public:
         int*   idx_in   = reinterpret_cast<int*>(keys_out + A);
         int*   idx_out  = idx_in + A;
         int*   cls_buf  = idx_out + A;
+        int*   flag     = cls_buf + A;
 
         const int t  = params_.max_output;
         const int bk = 256;
@@ -262,21 +292,23 @@ public:
             obb_argmax_kernel<<<gd, bk, 0, stream>>>(d, A, C, nc, keys_in, cls_buf);
             iota_kernel<<<gd, bk, 0, stream>>>(idx_in, A);
             sort_scores_desc(workspace, A, keys_in, keys_out, idx_in, idx_out, stream);
-            obb_nms_kernel<<<1, 1, 0, stream>>>(d,
-                                                A,
-                                                C,
-                                                nc,
-                                                keys_out,
-                                                idx_out,
-                                                cls_buf,
-                                                params_.score_threshold,
-                                                params_.iou_threshold,
-                                                t,
-                                                num_dets + b,
-                                                out_boxes + static_cast<size_t>(b) * t * 4,
-                                                out_scores + static_cast<size_t>(b) * t,
-                                                out_classes + static_cast<size_t>(b) * t,
-                                                out_angles + static_cast<size_t>(b) * t);
+            obb_suppress_kernel<<<gd, bk, 0, stream>>>(
+                d, A, C, nc, keys_out, idx_out, cls_buf, params_.score_threshold, params_.iou_threshold, flag);
+            obb_compact_kernel<<<1, 1, 0, stream>>>(d,
+                                                    A,
+                                                    C,
+                                                    nc,
+                                                    keys_out,
+                                                    idx_out,
+                                                    cls_buf,
+                                                    flag,
+                                                    params_.score_threshold,
+                                                    t,
+                                                    num_dets + b,
+                                                    out_boxes + static_cast<size_t>(b) * t * 4,
+                                                    out_scores + static_cast<size_t>(b) * t,
+                                                    out_classes + static_cast<size_t>(b) * t,
+                                                    out_angles + static_cast<size_t>(b) * t);
         }
         return cudaGetLastError() == cudaSuccess ? 0 : -1;
     }
