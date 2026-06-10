@@ -4,21 +4,18 @@ from config import CLASSES_CLS
 from models.utils import blob
 
 
-def process(engine, bgr, draw, ctx) -> bool:
+def preprocess(bgr, ctx):
     img = cv2.resize(bgr, (ctx.width, ctx.height))
     rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     tensor = blob(rgb, return_seg=False)
+    return tensor, None
 
+
+def postprocess(data, meta, draw, ctx) -> bool:
     if ctx.torch:
-        import torch
-
-        data = engine(torch.asarray(tensor, device=ctx.device))
         score, cls_id = data[0].max(0)
         score, cls_id = float(score), int(cls_id)
     else:
-        import numpy as np
-
-        data = engine(np.ascontiguousarray(tensor))
         probs = data[0]
         cls_id = int(probs.argmax())
         score = float(probs[cls_id])

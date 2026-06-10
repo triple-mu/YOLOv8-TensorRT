@@ -11,11 +11,16 @@ POSE_NAMES = ["person"]
 POSE_COLORS = list(COLORS.values())
 
 
-def process(engine, bgr, draw, ctx) -> bool:
+def preprocess(bgr, ctx):
     img, ratio, dwdh = letterbox(bgr, (ctx.width, ctx.height))
-    dw, dh = int(dwdh[0]), int(dwdh[1])
     rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     tensor = blob(rgb, return_seg=False)
+    return tensor, (ratio, dwdh)
+
+
+def postprocess(data, meta, draw, ctx) -> bool:
+    ratio, dwdh = meta
+    dw, dh = int(dwdh[0]), int(dwdh[1])
 
     if ctx.torch:
         import torch
@@ -23,14 +28,12 @@ def process(engine, bgr, draw, ctx) -> bool:
         from models.torch_utils import pose_postprocess
 
         dwdh_arr = torch.asarray(dwdh * 2, dtype=torch.float32, device=ctx.device)
-        data = engine(torch.asarray(tensor, device=ctx.device))
         bboxes, scores, kpts, labels = pose_postprocess(data, ctx.conf_thres, ctx.iou_thres)
         empty = bboxes.numel() == 0
     else:
         from models.utils import pose_postprocess
 
         dwdh_arr = np.array(dwdh * 2, dtype=np.float32)
-        data = engine(np.ascontiguousarray(tensor))
         bboxes, scores, kpts, labels = pose_postprocess(data, ctx.conf_thres, ctx.iou_thres)
         empty = bboxes.size == 0
 

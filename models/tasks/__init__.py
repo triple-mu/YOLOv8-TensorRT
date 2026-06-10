@@ -1,13 +1,28 @@
 """Per-task inference handlers shared by the unified ``infer.py`` entry point.
 
-Each task module exposes ``process(engine, bgr, draw, ctx) -> bool`` which runs
-preprocess -> inference -> postprocess -> render for one image, drawing onto
-``draw`` in place and returning whether any object was found. The torch and
-numpy (cudart/pycuda) paths reuse ``models.torch_utils`` / ``models.utils``
-respectively, keeping the original numeric behaviour of both.
+Each task module exposes two functions:
+
+- ``preprocess(bgr, ctx) -> (tensor, meta)`` — letterbox/resize + blob for one
+  image; ``tensor`` is ``[1, 3, H, W]`` so a batch is just a concatenation.
+- ``postprocess(data, meta, draw, ctx) -> bool`` — decode one image's engine
+  output slice, draw onto ``draw`` in place, return whether anything was found.
+
+``infer.py`` runs the engine in between, so a batch of N images is one engine
+call on the stacked ``[N, 3, H, W]`` tensor followed by N per-image
+``postprocess`` calls (see ``slice_batch``). The torch and numpy (cudart/pycuda)
+paths reuse ``models.torch_utils`` / ``models.utils`` respectively, keeping the
+original numeric behaviour of both.
 """
 
 from dataclasses import dataclass
+
+
+def slice_batch(data, i: int):
+    """One image's slice of a batched engine output, keeping the leading dim
+    so the per-task postprocess functions stay batch-shaped (``data[0]`` etc.)."""
+    if isinstance(data, tuple):
+        return tuple(t[i : i + 1] for t in data)
+    return data[i : i + 1]
 
 
 @dataclass

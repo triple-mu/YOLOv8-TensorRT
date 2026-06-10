@@ -103,6 +103,12 @@ python infer.py --task pose --backend pycuda --engine yolov8s-pose.engine --imgs
 | `--show` / `--out-dir`       | display in a window, or save to a directory         |
 | `--conf-thres` `--iou-thres` | thresholds (seg / pose / obb)                       |
 | `--device`                   | torch device, e.g. `cuda:0` (torch backend)         |
+| `--batch`                    | images per engine call (dynamic-batch engines)      |
+
+> **Batched inference.** Images are run in one engine call per batch and decoded
+> per image. A fixed-batch engine (e.g. exported with `batch=2`) is driven at its
+> own batch size; a dynamic-batch engine follows `--batch N`. With a single image
+> or a batch-1 engine the behaviour is unchanged.
 
 ### 4. Inference — C++
 
