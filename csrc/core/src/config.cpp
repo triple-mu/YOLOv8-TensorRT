@@ -26,6 +26,7 @@ namespace {
               << "  --out-dir <dir>   output directory (default \"" << d.out_dir << "\")\n"
               << "  --show            display results in a window instead of saving\n"
               << "  --profile         print a per-layer timing report\n"
+              << "  --gpu-preprocess  preprocess on the GPU (CUDA kernel) instead of CPU/OpenCV\n"
               << "  --no-warmup       skip warmup iterations\n"
               << "  -h, --help        show this help\n";
     std::exit(code);
@@ -99,6 +100,9 @@ CliArgs parse_args(int argc, char** argv, const InferConfig& defaults)
         }
         else if (a == "--profile") {
             args.config.profile = true;
+        }
+        else if (a == "--gpu-preprocess") {
+            args.config.gpu_preprocess = true;
         }
         else if (a == "--no-warmup") {
             args.config.warmup = false;
