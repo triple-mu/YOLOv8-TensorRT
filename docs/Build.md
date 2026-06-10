@@ -91,10 +91,12 @@ detections match the CPU path within tolerance, not byte-for-byte.
 
 ## Custom postprocess plugins (opt-in)
 
-The detection postprocess (decode + NMS) can run inside the engine as a custom
-TensorRT plugin (`YoloDetPostprocess`, an alternative to the built-in
-`EfficientNMS_TRT`). Build the plugin library — like the engine, it is tied to the
-TensorRT version it is built against, so use the same `-DTensorRT_ROOT`:
+The postprocess (decode + NMS) can run inside the engine as a custom TensorRT plugin
+instead of on the host: `YoloDetPostprocess` (detection, an alternative to the built-in
+`EfficientNMS_TRT`) and `YoloSegPostprocess` (segmentation — also gathers each kept
+box's mask coefficients; proto matmul + mask assembly still run outside the engine).
+Build the plugin library — like the engine, it is tied to the TensorRT version it is
+built against, so use the same `-DTensorRT_ROOT`:
 
 ```shell
 cmake -S . -B build -DTensorRT_ROOT=/data/TensorRT-10.16.1.11 -DBUILD_PLUGINS=ON
@@ -114,8 +116,15 @@ export YOLOV8_PLUGIN_LIB=$PWD/build/bin/libyolov8_plugins.so   # so build.py / i
 ```
 
 The C++ runtime loads the `.so` from `--plugin-lib` or `$YOLOV8_PLUGIN_LIB` before
-deserializing. The plugin uses cub (not thrust) for its NMS sort, so it is safe under
-CUDA-graph capture. `EfficientNMS_TRT` remains the default; the plugin is opt-in.
+deserializing, and the C++ binaries auto-detect the plugin outputs. The plugins use cub
+(not thrust) for their NMS sort, so they are safe under CUDA-graph capture.
+`EfficientNMS_TRT` / the raw path remain the default; the plugins are opt-in.
+
+> The detection plugin engine also runs under Python (`infer.py --task det`), since its
+> outputs match `EfficientNMS_TRT`. The **segmentation** plugin engine (6 outputs) is
+> currently consumed by the C++ `yolov8_seg` binary only; `infer.py --task seg` still
+> expects the raw two-output engine. Build/export from Python, run seg-plugin inference
+> from C++.
 
 ## Tests
 

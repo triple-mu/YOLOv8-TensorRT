@@ -123,6 +123,64 @@ class TRT_YoloDet(torch.autograd.Function):
         return nums_dets, boxes, scores, classes
 
 
+class TRT_YoloSeg(torch.autograd.Function):
+    """Decode+NMS+top-k for segmentation; also gathers per-box mask coefficients.
+    Targets the YoloSegPostprocess plugin (libyolov8_plugins.so)."""
+
+    @staticmethod
+    def forward(
+        ctx: Graph,
+        boxes: Tensor,
+        scores: Tensor,
+        coeffs: Tensor,
+        iou_threshold: float = 0.65,
+        score_threshold: float = 0.25,
+        max_output_boxes: int = 100,
+        background_class: int = -1,
+        box_coding: int = 0,
+        plugin_version: str = "1",
+        score_activation: int = 0,
+    ) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
+        batch_size, num_boxes, num_classes = scores.shape
+        nm = coeffs.shape[-1]
+        num_dets = torch.randint(0, max_output_boxes, (batch_size, 1), dtype=torch.int32)
+        boxes = torch.randn(batch_size, max_output_boxes, 4)
+        scores = torch.randn(batch_size, max_output_boxes)
+        labels = torch.randint(0, num_classes, (batch_size, max_output_boxes), dtype=torch.int32)
+        mask_coeffs = torch.randn(batch_size, max_output_boxes, nm)
+        return num_dets, boxes, scores, labels, mask_coeffs
+
+    @staticmethod
+    def symbolic(
+        g,
+        boxes: Value,
+        scores: Value,
+        coeffs: Value,
+        iou_threshold: float = 0.65,
+        score_threshold: float = 0.25,
+        max_output_boxes: int = 100,
+        background_class: int = -1,
+        box_coding: int = 0,
+        score_activation: int = 0,
+        plugin_version: str = "1",
+    ) -> tuple[Value, Value, Value, Value, Value]:
+        out = g.op(
+            "TRT::YoloSegPostprocess",
+            boxes,
+            scores,
+            coeffs,
+            iou_threshold_f=iou_threshold,
+            score_threshold_f=score_threshold,
+            max_output_boxes_i=max_output_boxes,
+            background_class_i=background_class,
+            box_coding_i=box_coding,
+            plugin_version_s=plugin_version,
+            score_activation_i=score_activation,
+            outputs=5,
+        )
+        return out
+
+
 class C2f(nn.Module):
     def __init__(self, *args, **kwargs):
         super().__init__()
@@ -172,6 +230,10 @@ class PostSeg(nn.Module):
     export = True
     shape = None
     dynamic = False
+    iou_thres = 0.65
+    conf_thres = 0.25
+    topk = 100
+    plugin = False  # True -> emit the YoloSegPostprocess plugin (decode+NMS+coeffs in-engine)
 
     def __init__(self, *args, **kwargs):
         super().__init__()
@@ -180,11 +242,17 @@ class PostSeg(nn.Module):
         p = self.proto(x[0])  # mask protos
         bs = p.shape[0]  # batch size
         mc = torch.cat([self.cv4[i](x[i]).view(bs, self.nm, -1) for i in range(self.nl)], 2)  # mask coefficients
-        boxes, scores, labels = self.forward_det(x)
+        if self.plugin:
+            boxes, scores = self._boxes_scores(x)
+            det = TRT_YoloSeg.apply(boxes, scores, mc.transpose(1, 2), self.iou_thres, self.conf_thres, self.topk)
+            return (*det, p.flatten(2))  # num_dets, bboxes, scores, labels, mask_coeffs, proto
+        boxes, scores = self._boxes_scores(x)
+        scores, labels = scores.max(dim=-1, keepdim=True)
         out = torch.cat([boxes, scores, labels.float(), mc.transpose(1, 2)], 2)
         return out, p.flatten(2)
 
-    def forward_det(self, x):
+    # Decoded boxes [b, anchors, 4] (corner) and per-class scores [b, anchors, nc].
+    def _boxes_scores(self, x):
         shape = x[0].shape
         b, res, b_reg_num = shape[0], [], self.reg_max * 4
         for i in range(self.nl):
@@ -200,8 +268,7 @@ class PostSeg(nn.Module):
         boxes0, boxes1 = -boxes[:, :2, ...], boxes[:, 2:, ...]
         boxes = self.anchors.repeat(b, 2, 1) + torch.cat([boxes0, boxes1], 1)
         boxes = boxes * self.strides
-        scores, labels = scores.transpose(1, 2).max(dim=-1, keepdim=True)
-        return boxes.transpose(1, 2), scores, labels
+        return boxes.transpose(1, 2), scores.transpose(1, 2)
 
 
 def optim(module: nn.Module):
