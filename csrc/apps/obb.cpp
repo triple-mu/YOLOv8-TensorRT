@@ -23,6 +23,56 @@ public:
     void postprocess(std::vector<Object>& objs) override
     {
         objs.clear();
+        if (binding_index("num_dets") >= 0) {
+            postprocess_plugin(objs);
+        }
+        else {
+            postprocess_raw(objs);
+        }
+    }
+
+private:
+    int binding_index(const std::string& name) const
+    {
+        for (size_t i = 0; i < output_bindings_.size(); ++i) {
+            if (output_bindings_[i].name == name) {
+                return static_cast<int>(i);
+            }
+        }
+        return -1;
+    }
+
+    // YoloObbPostprocess plugin: rotated NMS in-engine; only rescale + build rrect.
+    void postprocess_plugin(std::vector<Object>& objs)
+    {
+        const int*   num_dets = static_cast<const int*>(host_ptrs_[binding_index("num_dets")]);
+        const float* boxes    = static_cast<const float*>(host_ptrs_[binding_index("bboxes")]);
+        const float* scores   = static_cast<const float*>(host_ptrs_[binding_index("scores")]);
+        const int*   labels   = static_cast<const int*>(host_ptrs_[binding_index("labels")]);
+        const float* angles   = static_cast<const float*>(host_ptrs_[binding_index("angles")]);
+        const float  dw = pparam_.dw, dh = pparam_.dh;
+        const float  width = pparam_.width, height = pparam_.height, ratio = pparam_.ratio;
+
+        for (int i = 0; i < num_dets[0]; ++i) {
+            const float* bp = boxes + i * 4;
+            const float  x  = clamp((bp[0] - dw) * ratio, 0.f, width);
+            const float  y  = clamp((bp[1] - dh) * ratio, 0.f, height);
+            const float  w  = clamp(bp[2] * ratio, 0.f, width);
+            const float  h  = clamp(bp[3] * ratio, 0.f, height);
+            if (w < 1.f || h < 1.f) {
+                continue;
+            }
+            Object obj;
+            obj.rrect     = cv::RotatedRect(cv::Point2f(x, y), cv::Size2f(w, h), angles[i] / CV_PI * 180.f);
+            obj.has_rrect = true;
+            obj.prob      = scores[i];
+            obj.label     = labels[i];
+            objs.push_back(obj);
+        }
+    }
+
+    void postprocess_raw(std::vector<Object>& objs)
+    {
         const int   num_channels = output_bindings_[0].dims.d[1];
         const int   num_anchors  = output_bindings_[0].dims.d[2];
         const int   num_labels   = num_channels - 5;  // 4 box coords + nc + 1 angle
@@ -81,6 +131,7 @@ public:
         }
     }
 
+public:
     void draw(const cv::Mat& image, cv::Mat& res, const std::vector<Object>& objs) const override
     {
         const Palette& colors = palette();
