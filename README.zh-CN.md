@@ -166,4 +166,4 @@ cmake -S . -B build -DBUILD_TESTS=ON && ctest --test-dir build   # C++ 单元测
 
 内置的第三方代码（`ghc::filesystem`、TensorRT samples）在 [ACKNOWLEDGMENTS.md](ACKNOWLEDGMENTS.md) 中标注。基于 [MIT](LICENSE) 许可。
 
-[![Star History](https://api.star-history.com/svg?repos=triple-Mu/YOLOv8-TensorRT&type=Date)](https://star-history.com/#triple-Mu/YOLOv8-TensorRT&Date)
+[![Star History](https://star-history.dera.page/svg?repos=triple-Mu/YOLOv8-TensorRT&type=Date)](https://star-history.dera.page/#triple-Mu/YOLOv8-TensorRT&Date)
