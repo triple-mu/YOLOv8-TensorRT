@@ -169,4 +169,4 @@ More questions (batch, INT8, export tweaks, custom models, …) are answered in 
 
 Bundled third-party code (`ghc::filesystem`, TensorRT samples) is credited in [ACKNOWLEDGMENTS.md](ACKNOWLEDGMENTS.md). Licensed under [MIT](LICENSE).
 
-[![Star History](https://api.star-history.com/svg?repos=triple-Mu/YOLOv8-TensorRT&type=Date)](https://star-history.com/#triple-Mu/YOLOv8-TensorRT&Date)
+[![Star History](https://star-history.dera.page/svg?repos=triple-Mu/YOLOv8-TensorRT&type=Date)](https://star-history.dera.page/#triple-Mu/YOLOv8-TensorRT&Date)
