@@ -5,7 +5,7 @@ import onnx
 import torch
 from ultralytics import YOLO
 
-from models.common import optim
+from models.common import PostSeg, optim
 
 try:
     import onnxsim
@@ -22,9 +22,19 @@ def parse_args() -> argparse.Namespace:
         "--input-shape", nargs="+", type=int, default=[1, 3, 640, 640], help="Model input shape only for api builder"
     )
     parser.add_argument("--device", type=str, default="cpu", help="Export ONNX device")
+    parser.add_argument(
+        "--plugin", action="store_true", help="Emit the YoloSegPostprocess plugin (decode+NMS+mask coeffs in-engine)"
+    )
+    parser.add_argument("--iou-thres", type=float, default=0.65, help="IoU threshold (plugin)")
+    parser.add_argument("--conf-thres", type=float, default=0.25, help="Score threshold (plugin)")
+    parser.add_argument("--topk", type=int, default=100, help="Max detections (plugin)")
     args = parser.parse_args()
     if len(args.input_shape) != 4:
         raise ValueError(f"--input-shape needs 4 values, got {len(args.input_shape)}")
+    PostSeg.plugin = args.plugin
+    PostSeg.iou_thres = args.iou_thres
+    PostSeg.conf_thres = args.conf_thres
+    PostSeg.topk = args.topk
     return args
 
 
@@ -39,6 +49,9 @@ def main(args: argparse.Namespace) -> None:
     for _ in range(2):
         model(fake_input)
     save_path = args.weights.replace(".pt", ".onnx")
+    output_names = (
+        ["num_dets", "bboxes", "scores", "labels", "mask_coeffs", "proto"] if args.plugin else ["outputs", "proto"]
+    )
     with BytesIO() as f:
         torch.onnx.export(
             model,
@@ -46,7 +59,7 @@ def main(args: argparse.Namespace) -> None:
             f,
             opset_version=args.opset,
             input_names=["images"],
-            output_names=["outputs", "proto"],
+            output_names=output_names,
             dynamo=False,
         )
         f.seek(0)

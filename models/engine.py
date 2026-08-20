@@ -8,6 +8,7 @@ import tensorrt as trt
 import torch
 
 from models import compat
+from models.plugins import load_plugin_lib
 
 os.environ["CUDA_MODULE_LOADING"] = "LAZY"
 
@@ -44,6 +45,7 @@ class EngineBuilder:
         with_profiling: bool = True,
     ) -> None:
         logger = trt.Logger(trt.Logger.WARNING)
+        load_plugin_lib()  # register custom plugins (no-op unless YOLOV8_PLUGIN_LIB is set)
         trt.init_libnvinfer_plugins(logger, namespace="")
         builder = trt.Builder(logger)
         config = builder.create_builder_config()
@@ -109,10 +111,20 @@ class EngineBuilder:
     def build_from_onnx(self, iou_thres: float = 0.65, conf_thres: float = 0.25, topk: int = 100) -> None:
         parser = trt.OnnxParser(self.network, self.logger)
         onnx_model = onnx.load(str(self.checkpoint))
-        if not self.seg:
-            onnx_model.graph.node[-1].attribute[2].i = topk
-            onnx_model.graph.node[-1].attribute[3].f = conf_thres
-            onnx_model.graph.node[-1].attribute[4].f = iou_thres
+        # Override the NMS node's thresholds by attribute name. Works for EfficientNMS_TRT
+        # and the Yolo*Postprocess plugins wherever the node sits in the graph; a no-op for
+        # raw engines that have no such node.
+        for node in onnx_model.graph.node:
+            names = {a.name for a in node.attribute}
+            if "iou_threshold" in names and "score_threshold" in names:
+                for attr in node.attribute:
+                    if attr.name == "max_output_boxes":
+                        attr.i = topk
+                    elif attr.name == "score_threshold":
+                        attr.f = conf_thres
+                    elif attr.name == "iou_threshold":
+                        attr.f = iou_thres
+                break
 
         if not parser.parse(onnx_model.SerializeToString()):
             raise RuntimeError(f"Failed to load ONNX file: {str(self.checkpoint)}")
@@ -213,6 +225,7 @@ class TRTModule(torch.nn.Module):
 
     def __init_engine(self) -> None:
         logger = trt.Logger(trt.Logger.WARNING)
+        load_plugin_lib()  # register custom plugins before deserialize (no-op unless YOLOV8_PLUGIN_LIB set)
         trt.init_libnvinfer_plugins(logger, namespace="")
         with trt.Runtime(logger) as runtime:
             model = runtime.deserialize_cuda_engine(self.weight.read_bytes())
