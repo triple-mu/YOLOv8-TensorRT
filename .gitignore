@@ -10,6 +10,7 @@
 *.bmp
 *.plan
 .clang-format
+.vscode
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -143,3 +144,10 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# yolov7 things
+/yolov7
+data/
+data/*
+csrc/yolov7/jetson/output.mp4
+*.trt
