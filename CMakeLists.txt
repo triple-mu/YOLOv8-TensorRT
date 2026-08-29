@@ -28,6 +28,26 @@ endif()
 find_package(CUDAToolkit REQUIRED)  # provides CUDA::cudart (no CUDA language needed)
 find_package(OpenCV REQUIRED)
 find_package(TensorRT REQUIRED)
+
+# Optional CUDA toolchain for the GPU preprocessing kernel (opt-in --gpu-preprocess).
+# If nvcc is available we enable the CUDA language and compile preprocess.cu into the
+# core lib; otherwise the GPU path compiles to a stub that throws (CPU path unaffected).
+include(CheckLanguage)
+if(NOT CMAKE_CUDA_COMPILER AND EXISTS /usr/local/cuda/bin/nvcc)
+    set(CMAKE_CUDA_COMPILER /usr/local/cuda/bin/nvcc)
+endif()
+check_language(CUDA)
+if(CMAKE_CUDA_COMPILER)
+    # Set before enable_language(CUDA), which would otherwise default it to "52".
+    if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
+        set(CMAKE_CUDA_ARCHITECTURES 75 86 89 90)  # Turing..Hopper; override with -D for others
+    endif()
+    enable_language(CUDA)
+    set(YOLOV8_GPU_PREPROCESS ON)
+    message(STATUS "GPU preprocessing: enabled (CUDA ${CMAKE_CUDA_COMPILER_VERSION}, arch ${CMAKE_CUDA_ARCHITECTURES})")
+else()
+    message(STATUS "GPU preprocessing: disabled (no CUDA compiler; --gpu-preprocess will be unavailable)")
+endif()
 print_var(TensorRT_VERSION_STRING)
 print_var(OpenCV_VERSION)
 

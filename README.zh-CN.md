@@ -115,8 +115,10 @@ python infer.py --task pose --backend pycuda --engine yolov8s-pose.engine --imgs
 cmake -S . -B build -DTensorRT_ROOT=/path/to/TensorRT
 cmake --build build -j
 export LD_LIBRARY_PATH=/path/to/TensorRT/lib:$LD_LIBRARY_PATH
-./build/bin/yolov8_detect yolov8s.engine data/bus.jpg --out-dir output   # --show / --profile / --labels
+./build/bin/yolov8_detect yolov8s.engine data/bus.jpg --out-dir output   # --show / --profile / --labels / --gpu-preprocess
 ```
+
+`--gpu-preprocess` 用 CUDA kernel 做 letterbox + 归一化（原始 uint8 图直接变成网络输入，无 CPU/OpenCV 步骤）；opt-in，仅在找到 CUDA 编译器时构建。结果与 CPU 路径在容差内一致（GPU 双线性 ≠ `cv::resize`）。
 
 构建细节、多版本 TensorRT/OpenCV、TensorRT 8 的 cuDNN 依赖与 C++14 回退见 **[docs/Build.md](docs/Build.md)**。类别名在 `data/labels/*.txt`（用 `--labels` 覆盖）。
 
