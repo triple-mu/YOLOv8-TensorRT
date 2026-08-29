@@ -118,8 +118,12 @@ python infer.py --task pose --backend pycuda --engine yolov8s-pose.engine --imgs
 cmake -S . -B build -DTensorRT_ROOT=/path/to/TensorRT
 cmake --build build -j
 export LD_LIBRARY_PATH=/path/to/TensorRT/lib:$LD_LIBRARY_PATH
-./build/bin/yolov8_detect yolov8s.engine data/bus.jpg --out-dir output   # --show / --profile / --labels
+./build/bin/yolov8_detect yolov8s.engine data/bus.jpg --out-dir output   # --show / --profile / --labels / --gpu-preprocess
 ```
+
+`--gpu-preprocess` runs letterbox + normalize as a CUDA kernel (raw uint8 image straight
+to the network input, no CPU/OpenCV step); it is opt-in and built only when a CUDA
+compiler is found. Results match the CPU path within tolerance (GPU bilinear ≠ `cv::resize`).
 
 Build details, multiple TensorRT/OpenCV versions, cuDNN for TensorRT 8 and the C++14 fallback are in **[docs/Build.md](docs/Build.md)**. Class names live in `data/labels/*.txt` (override with `--labels`).
 

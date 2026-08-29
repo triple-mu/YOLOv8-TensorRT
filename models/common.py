@@ -69,6 +69,60 @@ class TRT_NMS(torch.autograd.Function):
         return nums_dets, boxes, scores, classes
 
 
+class TRT_YoloDet(torch.autograd.Function):
+    """Same inputs/outputs as TRT_NMS but targets our custom YoloDetPostprocess plugin
+    (libyolov8_plugins.so) instead of the built-in EfficientNMS_TRT."""
+
+    @staticmethod
+    def forward(
+        ctx: Graph,
+        boxes: Tensor,
+        scores: Tensor,
+        iou_threshold: float = 0.65,
+        score_threshold: float = 0.25,
+        max_output_boxes: int = 100,
+        background_class: int = -1,
+        box_coding: int = 0,
+        plugin_version: str = "1",
+        score_activation: int = 0,
+    ) -> tuple[Tensor, Tensor, Tensor, Tensor]:
+        batch_size, num_boxes, num_classes = scores.shape
+        num_dets = torch.randint(0, max_output_boxes, (batch_size, 1), dtype=torch.int32)
+        boxes = torch.randn(batch_size, max_output_boxes, 4)
+        scores = torch.randn(batch_size, max_output_boxes)
+        labels = torch.randint(0, num_classes, (batch_size, max_output_boxes), dtype=torch.int32)
+        return num_dets, boxes, scores, labels
+
+    @staticmethod
+    def symbolic(
+        g,
+        boxes: Value,
+        scores: Value,
+        iou_threshold: float = 0.65,
+        score_threshold: float = 0.25,
+        max_output_boxes: int = 100,
+        background_class: int = -1,
+        box_coding: int = 0,
+        score_activation: int = 0,
+        plugin_version: str = "1",
+    ) -> tuple[Value, Value, Value, Value]:
+        out = g.op(
+            "TRT::YoloDetPostprocess",
+            boxes,
+            scores,
+            iou_threshold_f=iou_threshold,
+            score_threshold_f=score_threshold,
+            max_output_boxes_i=max_output_boxes,
+            background_class_i=background_class,
+            box_coding_i=box_coding,
+            plugin_version_s=plugin_version,
+            score_activation_i=score_activation,
+            outputs=4,
+        )
+        nums_dets, boxes, scores, classes = out
+        return nums_dets, boxes, scores, classes
+
+
 class C2f(nn.Module):
     def __init__(self, *args, **kwargs):
         super().__init__()
@@ -88,6 +142,7 @@ class PostDetect(nn.Module):
     iou_thres = 0.65
     conf_thres = 0.25
     topk = 100
+    plugin = False  # True -> emit the custom YoloDetPostprocess plugin instead of EfficientNMS_TRT
 
     def __init__(self, *args, **kwargs):
         super().__init__()
@@ -109,7 +164,8 @@ class PostDetect(nn.Module):
         boxes = self.anchors.repeat(b, 2, 1) + torch.cat([boxes0, boxes1], 1)
         boxes = boxes * self.strides
 
-        return TRT_NMS.apply(boxes.transpose(1, 2), scores.transpose(1, 2), self.iou_thres, self.conf_thres, self.topk)
+        nms = TRT_YoloDet if self.plugin else TRT_NMS
+        return nms.apply(boxes.transpose(1, 2), scores.transpose(1, 2), self.iou_thres, self.conf_thres, self.topk)
 
 
 class PostSeg(nn.Module):
