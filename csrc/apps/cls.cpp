@@ -59,6 +59,11 @@ protected:
         resize_blob(image, blob, config_.input_size, pparam_);
     }
 
+    bool letterbox_preproc() const override
+    {
+        return false;  // cls uses plain resize on the GPU path too
+    }
+
 private:
     std::vector<std::string> class_names_;
 };

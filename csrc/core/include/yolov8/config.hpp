@@ -15,10 +15,12 @@ struct InferConfig {
     int         seg_h        = 160;
     int         seg_w        = 160;
     std::string labels_path;  // empty -> built-in COCO names
-    bool        warmup  = true;
-    bool        show    = false;  // off by default (works headless); otherwise save
-    bool        profile = false;  // attach a per-layer IProfiler and print a report
-    std::string out_dir = "output";
+    std::string plugin_lib;   // custom plugin .so to dlopen (else $YOLOV8_PLUGIN_LIB)
+    bool        warmup         = true;
+    bool        show           = false;  // off by default (works headless); otherwise save
+    bool        profile        = false;  // attach a per-layer IProfiler and print a report
+    bool        gpu_preprocess = false;  // preprocess on GPU (CUDA kernel) instead of CPU/OpenCV
+    std::string out_dir        = "output";
 };
 
 struct CliArgs {

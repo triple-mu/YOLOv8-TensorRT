@@ -11,7 +11,10 @@
 
 using namespace yolov8;
 
-// YOLOv8 detection: a single output [1, 4+num_classes, num_anchors].
+// YOLOv8 detection. Auto-detects the engine kind from its outputs: a single
+// [1, 4+num_classes, num_anchors] tensor → raw decode + cv::dnn NMS; four tensors
+// (num_dets, bboxes, scores, labels) → NMS already baked in (EfficientNMS_TRT or the
+// YoloDetPostprocess plugin), so we only rescale. One binary handles all three.
 class DetectEngine: public Engine {
 public:
     DetectEngine(const std::string& engine_path, const InferConfig& config): Engine(engine_path, config)
@@ -22,6 +25,48 @@ public:
     void postprocess(std::vector<Object>& objs) override
     {
         objs.clear();
+        if (output_bindings_.size() >= 4) {
+            postprocess_end2end(objs);
+        }
+        else {
+            postprocess_raw(objs);
+        }
+    }
+
+    void draw(const cv::Mat& image, cv::Mat& res, const std::vector<Object>& objs) const override
+    {
+        draw_detections(image, res, objs, class_names_);
+    }
+
+private:
+    // NMS baked into the engine: outputs are num_dets, bboxes, scores, labels.
+    void postprocess_end2end(std::vector<Object>& objs)
+    {
+        const int*   num_dets = static_cast<const int*>(host_ptrs_[0]);
+        const float* boxes    = static_cast<const float*>(host_ptrs_[1]);
+        const float* scores   = static_cast<const float*>(host_ptrs_[2]);
+        const int*   labels   = static_cast<const int*>(host_ptrs_[3]);
+        const float  dw = pparam_.dw, dh = pparam_.dh;
+        const float  width = pparam_.width, height = pparam_.height, ratio = pparam_.ratio;
+
+        for (int i = 0; i < num_dets[0]; ++i) {
+            const float* ptr = boxes + i * 4;
+            const float  x0  = clamp((ptr[0] - dw) * ratio, 0.f, width);
+            const float  y0  = clamp((ptr[1] - dh) * ratio, 0.f, height);
+            const float  x1  = clamp((ptr[2] - dw) * ratio, 0.f, width);
+            const float  y1  = clamp((ptr[3] - dh) * ratio, 0.f, height);
+
+            Object obj;
+            obj.rect  = cv::Rect_<float>(x0, y0, x1 - x0, y1 - y0);
+            obj.prob  = scores[i];
+            obj.label = labels[i];
+            objs.push_back(obj);
+        }
+    }
+
+    // Raw head output [1, 4+num_classes, num_anchors]: decode + NMS on the host.
+    void postprocess_raw(std::vector<Object>& objs)
+    {
         const int   num_channels = output_bindings_[0].dims.d[1];
         const int   num_anchors  = output_bindings_[0].dims.d[2];
         const int   num_labels   = num_channels - 4;
@@ -78,12 +123,6 @@ public:
         }
     }
 
-    void draw(const cv::Mat& image, cv::Mat& res, const std::vector<Object>& objs) const override
-    {
-        draw_detections(image, res, objs, class_names_);
-    }
-
-private:
     std::vector<std::string> class_names_;
 };
 
